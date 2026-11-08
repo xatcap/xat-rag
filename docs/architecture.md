@@ -35,7 +35,7 @@ Changing the LLM of the app needs no rebuild of the index. Recipes do not name a
 
 ## 2. Package layout
 
-xat-rag is a modular monolith in one uv workspace. It follows the [Python guidelines](python/index.md). LangChain is the foundation of the interfaces. See [ADR 0001](adr/0001-langchain-core-as-foundation.md).
+xat-rag is a modular monolith in one uv workspace. It follows the [Python guidelines](portable/python/index.md). LangChain is the foundation of the interfaces. See [ADR 0001](adr/0001-langchain-core-as-foundation.md).
 
 ```
 packages/

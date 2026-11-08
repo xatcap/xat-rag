@@ -11,7 +11,7 @@ Zip checks run before the parse, and files with macros are refused. See ADR 0012
 """
 
 # lxml and the python-docx element classes have no full type data, so the "unknown" rules are off in
-# this one module (docs/python/index.md). Only strings and sections leave the module.
+# this one module (docs/portable/python/index.md). Only strings and sections leave the module.
 # pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false
 # pyright: reportMissingTypeStubs=false, reportAttributeAccessIssue=false
 

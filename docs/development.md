@@ -1,6 +1,6 @@
 # Development
 
-This page describes how to set up xat-rag, and how to build, test, evaluate, package and release it. Read the [architecture](architecture.md) and the [Python guidelines](python/index.md) first.
+This page describes how to set up xat-rag, and how to build, test, evaluate, package and release it. Read the [architecture](architecture.md) and the [Python guidelines](portable/python/index.md) first.
 
 ## Setup
 

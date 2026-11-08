@@ -19,7 +19,7 @@ This file is an index to the documentation in this repository.
 | [docs/api.md](docs/api.md) | The HTTP routes of the service, with the request and response bodies, the errors, the upload format, the settings and the limits. |
 | [docs/app-guide.md](docs/app-guide.md) | The work of an app that uses xat-rag: counting tokens, choosing chunks, building prompts, escaping text, handling citations and preparing the question. |
 | [docs/development.md](docs/development.md) | Setup, the build, test and lint commands, the tools, the retrieval gate, packaging, the smoke test and the CI jobs. |
-| [docs/writing-style.md](docs/writing-style.md) | The ASD-STE100 writing rules and the terms. All documentation, code comments, API descriptions, error messages and log messages follow them. |
+| [docs/portable/writing-style/writing-style.md](docs/portable/writing-style/writing-style.md) | The ASD-STE100 writing rules and the terms. All documentation, code comments, API descriptions, error messages and log messages follow them. |
 
 xat-rag v0.1 is implemented. The code is in `packages/`, `tools/`, `build/` and `eval/`. The [packages](#packages-and-tools) section lists them, and the [development](docs/development.md) page lists the commands.
 
@@ -71,23 +71,23 @@ Build and test commands are in [docs/development.md](docs/development.md). The m
 
 ### Python
 
-xat-rag is written in Python. The [Python guidelines](docs/python/index.md) apply to all code and tests.
+xat-rag is written in Python. The [Python guidelines](docs/portable/python/index.md) apply to all code and tests.
 
 ### .NET
 
-These pages are a shared baseline. General principles (SOLID, coupling, ADRs) are here, and the Python guidelines refer to them. The [index](docs/dotnet/index.md) gives a suggested reading order.
+These pages are a shared baseline. General principles (SOLID, coupling, ADRs) are here, and the Python guidelines refer to them. The [index](docs/portable/dotnet/index.md) gives a suggested reading order.
 
 | Page | What it covers |
 |------|----------------|
-| [.NET and C# Index](docs/dotnet/index.md) | Architecture Principles, .NET best practices, C# best practices, EF Core best practices, performance best practices for EF Core, .NET, C#. |
+| [.NET and C# Index](docs/portable/dotnet/index.md) | Architecture Principles, .NET best practices, C# best practices, EF Core best practices, performance best practices for EF Core, .NET, C#. |
 
 ### Flutter
 
-These pages are a shared baseline for Flutter clients. The [index](docs/flutter/index.md) gives a suggested reading order.
+These pages are a shared baseline for Flutter clients. The [index](docs/portable/flutter/index.md) gives a suggested reading order.
 
 | Page | What it covers |
 |------|----------------|
-| [Flutter and Dart Index](docs/flutter/index.md) | Dart best practices, Flutter best practices, Flutter performance, Flutter UI/UX guidelines, BLoC best practices, Flutter architecture. |
+| [Flutter and Dart Index](docs/portable/flutter/index.md) | Dart best practices, Flutter best practices, Flutter performance, Flutter UI/UX guidelines, BLoC best practices, Flutter architecture. |
 
 > [!IMPORTANT]
 >

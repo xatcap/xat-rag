@@ -30,12 +30,8 @@ If a rule makes a sentence harder to read, make the sentence easy to read. For e
 
 | Use | Meaning | Do not use |
 |---|---|---|
+| provider | A configured source of models, such as `anthropic` or `local`. | backend |
+| vendor | The company that operates a cloud service. | provider, for the company |
 | start | Make a program or a task begin. | launch, spin up, boot |
 | stop | Make a program or a task end. | shut down, terminate. Use "kill" only for the operating system action. |
-| caller | A program that sends requests to the xat-rag service. | client, for the program that uses the API |
-| RAG | One named index in xat-rag, with its sources and its retrieval settings. | collection, knowledge base |
-| source | One kind of input in a RAG, such as `docs`, `jira`, `diff` or `prompt`. | connector, for an input kind |
-| document | One item that a caller sends to a RAG, such as one ticket, one diff or one Markdown file. | file, record |
-| chunk | One searchable part of a document, with a stable ID. | node, passage, split |
-| recipe | A TOML file that describes a RAG or a context. | pipeline config |
-| LLM | The model of the app that gets the retrieved chunks and writes the answer. xat-rag does not know this model. | generator |
+| caller | A program that sends requests to the engine. | client, for the program that uses the API |

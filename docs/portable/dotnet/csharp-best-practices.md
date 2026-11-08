@@ -348,7 +348,7 @@ public sealed class Connection : IAsyncDisposable
 - Make doc comments describe **business logic**: the business purpose, the rules the member enforces, valid ranges and units, the business meaning of the return value, the exceptions it throws, and its thread-safety.
 - Where a design applies a SOLID principle, name the principle and the reason in the type's `<remarks>` ([SOLID](./solid-principles.md)).
 - Use inline comments (`//`) only to explain business logic that the code cannot show on its own, such as a business rule or a device constraint.
-- Write all comments in the [writing style](../writing-style.md) of this repository.
+- Write all comments in the [writing style](../writing-style/writing-style.md) of this repository.
 
 ```csharp
 /// <summary>Moves the stamp head to the given offset from the top edge of the page.</summary>

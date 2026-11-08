@@ -1,7 +1,7 @@
 """An ONNX model with its tokenizer, loaded from a local folder."""
 
 # onnxruntime has no full type data for InferenceSession, so the "unknown" rules are off in this one
-# module (docs/python/index.md). All values that leave the module are typed numpy arrays.
+# module (docs/portable/python/index.md). All values that leave the module are typed numpy arrays.
 # pyright: reportMissingTypeStubs=false, reportUnknownMemberType=false, reportUnknownVariableType=false
 # pyright: reportUnknownArgumentType=false
 

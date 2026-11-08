@@ -21,7 +21,7 @@ The hard part of xat-rag is retrieval quality: chunkers, the log query builder a
 
 ## Decision
 
-Write xat-rag in Python 3.12 or later. Use the baseline in the [Python guidelines](../python/index.md): a uv workspace, `ruff`, `pyright` in strict mode and `pytest`.
+Write xat-rag in Python 3.12 or later. Use the baseline in the [Python guidelines](../portable/python/index.md): a uv workspace, `ruff`, `pyright` in strict mode and `pytest`.
 
 Freeze the service with PyInstaller (one folder) on python-build-standalone. Change to Nuitka only if size or start time is a problem.
 

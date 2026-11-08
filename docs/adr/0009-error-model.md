@@ -26,4 +26,4 @@ Apps must show the right message for each failure. xat-rag maps each kind of fai
 
 - Apps can use one error body for all failures of xat-rag.
 - A temporary failure reaches the caller, and the caller decides if it tries again.
-- Error messages follow the [writing style](../writing-style.md). They never hold document text or input values. xat-rag replaces the default validation messages of pydantic and FastAPI.
+- Error messages follow the [writing style](../portable/writing-style/writing-style.md). They never hold document text or input values. xat-rag replaces the default validation messages of pydantic and FastAPI.
