@@ -30,16 +30,15 @@
     },
     {
       "id": "ministral-3-3b-tokenizer",
-      "role": "generator_tokenizer",
+      "role": "size_tokenizer",
       "repo": "mistralai/Ministral-3-3B-Instruct-2512",
       "revision": "b35d4dfe56c142746f54dbd64f579faab2744308",
       "upstream": "mistralai/Ministral-3-3B-Instruct-2512",
       "license": "Apache-2.0",
-      "notes": "Only the tokenizer files. tekken.json is for the conformance tool, not for the runtime.",
+      "notes": "Only the tokenizer files. The tokenizer is the fixed size ruler of xat-rag.",
       "files": [
         {"path": "tokenizer.json"},
-        {"path": "tokenizer_config.json"},
-        {"path": "tekken.json"}
+        {"path": "tokenizer_config.json"}
       ]
     }
   ]

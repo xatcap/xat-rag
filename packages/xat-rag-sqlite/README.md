@@ -5,9 +5,9 @@ The SQLite store of xat-rag. Each RAG is one SQLite file. See [ADR 0005](../../d
 | Module | What it does |
 |---|---|
 | `lexical` | Code-aware lexical tokens (`code-v1`) and safe FTS5 query expressions. |
-| `manifest` | The index manifest, and the check that refuses a mismatch. |
+| `manifest` | The index manifest, and the check that refuses a mismatch. It reads the old key `generator_tokenizer_id` as `size_tokenizer_id`. |
 | `store` | `SqliteRagStore`: the write side (upsert, delete, checkpoint) and the search functions. |
-| `retrievers` | `Fts5Retriever`, `VecRetriever` and `ExactLookupRetriever`, which implement LangChain `BaseRetriever`. |
+| `retrievers` | `Fts5Retriever` (keyword search) and `VecRetriever` (vector search), which implement LangChain `BaseRetriever`. |
 
 Rules:
 

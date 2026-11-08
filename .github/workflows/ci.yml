@@ -45,8 +45,6 @@ jobs:
         run: uv run lint-imports
       - name: Tests (sockets blocked, except loopback where a test allows it)
         run: uv run pytest
-      - name: Generator tokenizer conformance (mistral-common)
-        run: uv run python tools/measure_profile.py --check
       - name: Dependency allowlist, denylist and licenses
         run: uv run python tools/check_dependencies.py
       - name: Retrieval quality gate

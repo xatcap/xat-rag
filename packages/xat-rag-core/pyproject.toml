@@ -1,7 +1,7 @@
 [project]
 name = "xat-rag-core"
 version = "0.1.0"
-description = "The domain model, ports and pipeline rules of xat-rag: fusion, budget, packing, rendering and citations."
+description = "Domain model, ports, errors, sanitizing, query types, fusion, MMR and ranking of xat-rag."
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"

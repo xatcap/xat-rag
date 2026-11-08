@@ -1,8 +1,10 @@
 # 0010. Treat retrieved text as untrusted, keep content out of logs, and accept only pushed documents
 
-- Status: Accepted
+- Status: Accepted. Partly superseded by ADR 0014.
 - Date: 2026-11-07
 - Deciders: Project maintainer
+
+> Part of this decision is superseded on 2026-11-09 by [ADR 0014](0014-retrieval-only-and-app-side-fitting.md). xat-rag no longer wraps, escapes or labels retrieved text, and it no longer renders pinned prompts. The app must now treat returned text as untrusted and escape it. The other rules of this ADR stay in force. The text below is the history of the decision.
 
 ## Context
 

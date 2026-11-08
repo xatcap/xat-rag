@@ -1,6 +1,6 @@
 # xat-rag-core
 
-The domain model, the ports and the pipeline rules of xat-rag. See the [architecture](../../docs/architecture.md).
+The domain model, the ports and the rules of xat-rag. See the [architecture](../../docs/architecture.md).
 
 | Module | What it does |
 |---|---|
@@ -9,15 +9,14 @@ The domain model, the ports and the pipeline rules of xat-rag. See the [architec
 | `ids` | Content hashes, chunk IDs, heading anchors and slugs. `log_id` makes a hashed ID for logs. No code uses it yet. |
 | `parsing` | `SectionParser` (the protocol of the parsers), `Deadline`, `decode_text` and `SectionBlobParser`, a LangChain adapter. |
 | `lc_codec` | The only code that reads or writes LangChain `Document.metadata`. |
-| `query` | `RetrievalQuery`, exact lookups, filters and the text query builder (`text-v1`). |
+| `query` | `RetrievalQuery` and `build_query()`. The query has the lexical terms, the dense text and the rerank text. |
 | `sanitize` | Removes control, invisible and bidirectional characters, and normalizes to NFC. |
 | `fusion` | Reciprocal Rank Fusion with `chunk_id` tie-breaks. |
 | `mmr` | Duplicate removal and Maximal Marginal Relevance. |
-| `budget` | Generator profiles and the token budget for chunks. |
-| `packer` | Quotas for each source, and the "edges" order. |
-| `render` | The chat messages, with escaped untrusted blocks. |
-| `citations` | The GBNF grammar, the JSON schema and the answer check. |
-| `ports` | The `TokenCounter` and `QueryBuilder` protocols. |
+| `ranking` | `merge_ranked()`. It sorts the candidates of all RAGs by score, removes repeated chunk IDs and cuts the list to the number of chunks. It reports each omitted candidate with its reason: `duplicate` or `limit`. |
+| `ports` | The `TokenCounter` protocol of the size ruler. |
 | `tracing` | `no_tracing()` and `untraced()`, which turn off LangChain and LangSmith tracing for one call. |
 
 The package depends only on numpy and `langchain-core`.
+
+The package has no LLM code. It does not count tokens for an LLM, it does not build prompts and it does not check citations. See [ADR 0014](../../docs/adr/0014-retrieval-only-and-app-side-fitting.md).

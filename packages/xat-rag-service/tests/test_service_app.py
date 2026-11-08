@@ -25,7 +25,6 @@ def client(tmp_path_factory: pytest.TempPathFactory) -> TestClient:
             recipes_folder=Path(env["XatRag__RecipesFolder"]),
             models_folder=MODELS,
             lock_file=Path(env["XatRag__LockFile"]),
-            prompts_folder=Path(env["XatRag__PromptsFolder"]),
             threads=1,
         )
     )
@@ -54,8 +53,20 @@ def test_access_control(client: TestClient) -> None:
     assert client.get("/v1/rags", headers=AUTH).status_code == 200
 
 
-def test_ingest_context_and_citations(client: TestClient) -> None:
-    fields = json.dumps([{"doc_id": "docs:handbook.md", "kind": "markdown", "part": "f1", "uri": "docs/handbook.md"}])
+def test_ingest_and_context(client: TestClient) -> None:
+    fields = json.dumps(
+        [
+            {
+                "doc_id": "docs:handbook.md",
+                "kind": "markdown",
+                "part": "f1",
+                "uri": "docs/handbook.md",
+                "title": "Handbook",
+                "version": "v9",
+                "metadata": {"team": "core"},
+            }
+        ]
+    )
     body, content_type = multipart(fields, {"f1": DOC})
     response = client.put("/v1/rags/docs/documents", content=body, headers={**AUTH, "Content-Type": content_type})
     assert response.status_code == 202, response.text
@@ -63,22 +74,18 @@ def test_ingest_context_and_citations(client: TestClient) -> None:
     assert job["status"] == "done"
     assert job["results"][0]["status"] == "created"  # type: ignore[index]
 
-    pack = client.post("/v1/context", json={"context": "ask", "question": "Which port do orders use?"}, headers=AUTH)
-    assert pack.status_code == 200, pack.text
-    data = pack.json()
-    assert data["chunks"][0]["chunk_id"] == "docs:handbook.md#h/handbook/orders"
-    assert data["chunks"][0]["span"]["type"] == "line"
-    assert data["rendered"]["messages"][0]["role"] == "system"
-    assert "C1" in data["citation"]["grammar"]
-
-    chunks = [{"label": c["label"], "chunk_id": c["chunk_id"]} for c in data["chunks"]]
-    check = client.post(
-        "/v1/citations/validate",
-        json={"answer": json.dumps({"answer": "8080", "citations": ["C1"]}), "chunks": chunks},
-        headers=AUTH,
-    ).json()
-    assert check["valid"]
-    assert check["citations"][0]["uri"] == "docs/handbook.md"
+    result = client.post("/v1/context", json={"context": "ask", "question": "Which port do orders use?"}, headers=AUTH)
+    assert result.status_code == 200, result.text
+    data = result.json()
+    assert set(data) == {"chunks", "omitted", "debug"}
+    top = data["chunks"][0]
+    assert top["chunk_id"] == "docs:handbook.md#h/handbook/orders"
+    assert top["source"]["span"]["type"] == "line"
+    assert top["source"]["uri"] == "docs/handbook.md"
+    assert top["source"]["title"] == "Handbook"
+    assert top["source"]["version"] == "v9"
+    assert top["metadata"]["team"] == "core"
+    assert "8080" in top["text"]
 
 
 def test_errors_do_not_echo_input(client: TestClient) -> None:
@@ -90,19 +97,21 @@ def test_errors_do_not_echo_input(client: TestClient) -> None:
     assert client.post("/v1/context", json={"context": "missing", "question": "q"}, headers=AUTH).status_code == 404
     assert client.get("/v1/nothing", headers=AUTH).json()["error"]["type"] == "not_found_error"
     big = client.post(
-        "/v1/tokens/count", content=b"x" * (2 * 1024 * 1024), headers={**AUTH, "Content-Type": "application/json"}
+        "/v1/context", content=b"x" * (2 * 1024 * 1024), headers={**AUTH, "Content-Type": "application/json"}
     )
     assert big.status_code == 413
 
 
-def test_query_tokens_prompts_and_delete(client: TestClient) -> None:
-    query = client.post(
-        "/v1/query/build", json={"builder": "log-v1", "log_lines": ["ERROR PROJ-7 failed"]}, headers=AUTH
-    )
-    assert {"field": "jira_key", "value": "PROJ-7"} in query.json()["exact_lookups"]
-    assert client.post("/v1/tokens/count", json={"text": "Hello world."}, headers=AUTH).json()["tokens"] == 3
-    assert client.get("/v1/prompts/helper/1", headers=AUTH).json()["text"].startswith("You answer")
-    assert client.get("/v1/prompts/helper/2", headers=AUTH).status_code == 404
+def test_query_build_and_delete(client: TestClient) -> None:
+    query = client.post("/v1/query/build", json={"question": "ERROR PROJ-7 failed in OrderService.find"}, headers=AUTH)
+    assert query.status_code == 200
+    data = query.json()
+    assert set(data) == {"lexical_terms", "dense_text", "rerank_text"}
+    assert "PROJ-7" in data["lexical_terms"]
+    assert "OrderService.find" in data["lexical_terms"]
+    assert data["dense_text"] == "ERROR PROJ-7 failed in OrderService.find"
+    old = client.post("/v1/query/build", json={"builder": "log-v1", "log_lines": ["ERROR PROJ-7 failed"]}, headers=AUTH)
+    assert old.status_code == 400
     fields = json.dumps([{"doc_id": "docs:tmp/a b.md", "kind": "markdown", "part": "f", "uri": ""}])
     body, content_type = multipart(fields, {"f": b"# T\n\ntemp"})
     job = client.put("/v1/rags/docs/documents", content=body, headers={**AUTH, "Content-Type": content_type}).json()

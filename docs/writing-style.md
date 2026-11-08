@@ -38,6 +38,4 @@ If a rule makes a sentence harder to read, make the sentence easy to read. For e
 | document | One item that a caller sends to a RAG, such as one ticket, one diff or one Markdown file. | file, record |
 | chunk | One searchable part of a document, with a stable ID. | node, passage, split |
 | recipe | A TOML file that describes a RAG or a context. | pipeline config |
-| context pack | The result of a context request: the selected chunks, the budget and the rendered messages. | prompt bundle |
-| generator | The model that gets the context pack and writes the answer. | LLM, when the specific model matters |
-| budget | The number of tokens that a part of the prompt can use. | limit, for a token count in a prompt |
+| LLM | The model of the app that gets the retrieved chunks and writes the answer. xat-rag does not know this model. | generator |

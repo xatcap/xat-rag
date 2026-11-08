@@ -33,7 +33,7 @@ class IndexManifest:
     rag: str
     embedder: EmbedderInfo
     lexical_tokenizer: str
-    generator_tokenizer_id: str
+    size_tokenizer_id: str
     index_hash: str
     chunkers: Mapping[str, str] = field(default_factory=_empty_versions)
     index_format: int = INDEX_FORMAT
@@ -52,6 +52,8 @@ class IndexManifest:
             data = cast(dict[str, Any], json.loads(text))
             embedder = EmbedderInfo(**cast(dict[str, Any], data.pop("embedder")))
             chunkers = cast(dict[str, str], data.pop("chunkers"))
+            if "generator_tokenizer_id" in data:  # A manifest is written once, so old files keep the old key.
+                data["size_tokenizer_id"] = data.pop("generator_tokenizer_id")
             return IndexManifest(embedder=embedder, chunkers=chunkers, **data)
         except (ValueError, TypeError, KeyError) as error:
             raise InternalError("The index manifest is damaged. Rebuild the RAG.") from error
@@ -66,7 +68,7 @@ def check_manifest(stored: IndexManifest, expected: IndexManifest) -> None:
             "index_format",
             "embedder",
             "lexical_tokenizer",
-            "generator_tokenizer_id",
+            "size_tokenizer_id",
             "index_hash",
             "chunkers",
         )

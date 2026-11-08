@@ -22,7 +22,7 @@ from xat_rag_core.errors import ConfigError, IndexMismatchError, InternalError, 
 from xat_rag_core.ids import sha256_hex
 from xat_rag_core.lc_codec import span_from_meta, span_to_meta
 from xat_rag_core.model import Chunk, Scalar, SourceDocument, SourceKind
-from xat_rag_core.query import Equals, ExactLookup, Filter, OneOf, Range
+from xat_rag_core.query import Equals, Filter, OneOf, Range
 
 from xat_rag_sqlite.lexical import FTS5_TOKENIZE, index_text
 from xat_rag_sqlite.manifest import IndexManifest, check_manifest
@@ -619,24 +619,17 @@ class SqliteRagStore:
         )
         return self._query_chunks(sql, params)
 
-    def exact_lookup(self, lookups: Sequence[ExactLookup], k: int, filters: Filter) -> list[Chunk]:
-        """Return chunks whose metadata equals a lookup, by the number of matched lookups, then by chunk ID."""
-        _check_k(k)
-        if not lookups:
-            return []
-        where = " OR ".join("(f.field = ? AND f.value = ?)" for _ in lookups)
-        params: list[object] = [part for lookup in lookups for part in (lookup.field, lookup.value)]
-        sql = (
-            f"SELECT {_CHUNK_COLUMNS}, count(*) AS hits FROM chunk_fields f JOIN chunks c ON c.id = f.chunk_rowid "
-            f"WHERE ({where})"
-        )
-        filter_sql, filter_params = _filter_sql(filters)
-        if filter_sql:
-            sql += f" AND c.id IN ({filter_sql})"
-            params += filter_params
-        sql += " GROUP BY c.id ORDER BY hits DESC, c.chunk_id LIMIT ?"
-        params.append(k)
-        return self._query_chunks(sql, params)
+    def document_versions(self, doc_ids: Iterable[str]) -> dict[str, str]:
+        """Return the stored version of each document. Unknown IDs are left out."""
+        ids = list(dict.fromkeys(doc_ids))
+        result: dict[str, str] = {}
+        with self._read() as db:
+            for offset in range(0, len(ids), _ID_BATCH):
+                batch = ids[offset : offset + _ID_BATCH]
+                sql = f"SELECT doc_id, version FROM documents WHERE doc_id IN ({','.join('?' * len(batch))})"
+                for row in db.execute(sql, batch).fetchall():
+                    result[cast(str, row[0])] = cast(str, row[1])
+        return result
 
 
 def _row_to_document(document: SourceDocument, row: Sequence[Any]) -> SourceDocument:

@@ -2,6 +2,8 @@
 
 This page describes the HTTP API of the xat-rag service, version 0.1. The service code is in `packages/xat-rag-service/src/xat_rag_service/app.py`. See the [architecture](architecture.md), section 9, for the reasons.
 
+The API returns retrieved text only. It calls no LLM, it builds no prompt and it adds no tags or escaping to the text. The app does these tasks. See the [app guide](app-guide.md).
+
 The examples use two shell variables. `URL` is the `url` in the ready file. `KEY` is the access key.
 
 ```bash
@@ -31,13 +33,12 @@ Each error has this body:
 
 | Type | Status | When |
 |---|---|---|
-| `invalid_request_error` | 400 | A body, a field, an upload or a query parameter is not valid. A rebuild runs while a job of the RAG runs. A context request sets a value above its recipe. |
+| `invalid_request_error` | 400 | A body, a field, an upload or a query parameter is not valid. A question has no text after sanitizing. A rebuild runs while a job of the RAG runs. |
 | `invalid_request_error` | 405 | A route is used with the wrong method. |
 | `invalid_request_error` | 413 | A body is larger than its limit. |
 | `authentication_error` | 401 | The access key is missing or wrong. |
-| `not_found_error` | 404 | An unknown route, RAG, document, job, context or prompt. |
+| `not_found_error` | 404 | An unknown route, RAG, document, job or context. |
 | `index_mismatch_error` | 409 | The index of the RAG does not match the models or the recipe. Rebuild the RAG. |
-| `context_too_large_error` | 422 | The pinned prompts and the input do not fit in the window. |
 | `service_unavailable_error` | 503 | The service is degraded, with no `Retry-After`. Restart the service. Or the RAG is being rebuilt or stopped, with `Retry-After: 1`. |
 | `overloaded_error` | 503 | The request pool is full (`Retry-After: 1`). Or the upload queue is full (`Retry-After: 5`). |
 | `stage_timeout_error` | 504 | A stage took longer than its limit. The message names the stage. |
@@ -76,7 +77,7 @@ When a document ran too long, the service is degraded. The route returns 503:
    {"name": "docs", "needs_rebuild": false, "documents": 3, "chunks": 21},
    {"name": "jira", "needs_rebuild": true}
  ],
- "contexts": ["ask-docs", "log-triage"]}
+ "contexts": ["ask-docs", "triage"]}
 ```
 
 `GET /v1/rags/{rag}` returns the counts and part of the manifest:
@@ -85,7 +86,7 @@ When a document ran too long, the service is degraded. The route returns 503:
 {"name": "docs", "documents": 3, "chunks": 21,
  "manifest": {"index_format": 1, "embedder": "bge-small-en-v1.5", "embedder_sha256": "...",
               "dims": 384, "lexical_tokenizer": "code-v1",
-              "generator_tokenizer_id": "ministral-3-3b-tokenizer@99cf274236c6",
+              "size_tokenizer_id": "ministral-3-3b-tokenizer@99cf274236c6",
               "index_hash": "...", "chunkers": {"markdown": "markdown-v2+lcts1.1.3"}}}
 ```
 
@@ -139,41 +140,51 @@ Jobs live in memory. A restart of the service loses them. The service keeps the 
 
 ### Search
 
-`POST /v1/rags/{rag}/search` returns the ranked candidates of one RAG. It is for debugging and evaluation.
+`POST /v1/rags/{rag}/search` returns the candidates of one RAG. It is for debugging and evaluation. The app uses `POST /v1/context` for its questions.
 
 Request:
 
-```json
-{"builder": "text-v1", "question": "Which port does the orders service use?"}
-```
-
-`builder` is `text-v1` (the default) or `log-v1`. `log_lines` takes the log lines for `log-v1`. The response has the query and the hits:
+| Field | Type | Default | Meaning |
+|---|---|---|---|
+| `question` | string, at most 20000 characters | `""` | The question. |
 
 ```json
-{"query": {"lexical_terms": ["port", "orders", "service"], "dense_text": "...", "rerank_text": "...",
-           "exact_lookups": []},
- "hits": [{"chunk_id": "docs:orders.md#h/orders-service/ports-and-health", "uri": "orders.md",
-           "span": {"type": "line", "line_start": 4, "line_end": 9},
-           "lexical_rank": 1, "dense_rank": 2, "exact_rank": null,
-           "rrf_score": 0.0325, "rerank_score": 4.12}]}
+{"question": "Which port does the orders service use?"}
 ```
 
-Each rank is 1-based, or `null` when the stage did not find the chunk. `rerank_score` is `null` when the RAG has no reranker.
+The response has the query and the hits:
+
+```json
+{"query": {"lexical_terms": ["port", "orders", "service"], "dense_text": "...", "rerank_text": "..."},
+ "hits": [{"chunk_id": "docs:orders.md#h/orders-service/ports-and-health",
+           "parent_id": null, "kind": "section", "score": 4.12, "size_tokens": 37,
+           "header": "Orders service > Ports and health", "text": "...",
+           "source": {"rag": "docs", "doc_id": "docs:orders.md", "source_kind": "markdown",
+                      "uri": "orders.md", "title": "Orders service", "version": "4f2a9c1",
+                      "span": {"type": "line", "line_start": 4, "line_end": 9}},
+           "metadata": {"heading_level": 2},
+           "lexical_rank": 1, "dense_rank": 2, "rrf_score": 0.0325, "rerank_score": 4.12}]}
+```
+
+Each hit has the fields of a chunk (see [Chunk fields](#chunk-fields)). It also has these stage fields:
+
+- `lexical_rank` and `dense_rank`: the 1-based rank in each search, or `null` when the stage did not find the chunk.
+- `rrf_score`: the score of the fusion.
+- `rerank_score`: the score of the reranker, or `null` when the RAG has no reranker.
+
+A search returns at most the `keep` value of the RAG hits. The hits are in the order of the RAG search, not in the order of a context result.
 
 ### Context
 
-`POST /v1/context` makes a context pack. This is the main route.
+`POST /v1/context` returns the ranked chunks for a question. This is the main route. It is a retrieval call only. It calls no LLM.
 
 Request:
 
 | Field | Type | Default | Meaning |
 |---|---|---|---|
 | `context` | string, 1 to 64 characters | (required) | The name of a context recipe. |
-| `question` | string, at most 20000 characters | `""` | The question. Required for `text-v1`. |
-| `log_lines` | list of strings, at most 2000 | `[]` | The log lines. Each line is cut to 4096 characters. Only for `log-v1`. |
-| `selected_lines` | list of integers, at most 2000 | `[]` | Zero-based indexes of `log_lines` that the user selected. |
-| `reserved_output` | integer or `null` | The recipe value | Lowers the tokens for the answer. It cannot go above the recipe value. |
-| `input_max_tokens` | integer or `null` | The recipe value | Lowers the cap of the input section. It cannot go above the recipe value. |
+| `question` | string, at most 20000 characters | (required) | The question. Control and invisible characters are removed first. The question must still have text. |
+| `chunks` | integer, 1 to 100 | The `chunks` value of the recipe, default 10 | The number of chunks to return, at most. It must be a JSON integer. A string or a number with a fraction gives 400. |
 | `debug` | boolean | `false` | Adds the scores of each candidate to the response. |
 
 Example:
@@ -181,92 +192,94 @@ Example:
 ```bash
 curl -s -X POST "$URL/v1/context" -H "Authorization: Bearer $KEY" \
   -H "Content-Type: application/json" \
-  -d '{"context": "ask-docs", "question": "Which port does the orders service use?"}'
-```
-
-The response is the context pack:
-
-```json
-{"pack_id": "p_3f9c2a7d1e4b8c60a1f2", "generator": "ministral-3-3b", "max_tokens": 768,
- "budget": {"window": 8192, "reserved_output": 768, "overhead": 240, "pinned": 310, "input": 640,
-            "chunks": 4120, "margin": 246, "unused": 1868, "floors_lowered": false},
- "pinned": [{"id": "prompt:log-triage-system@3", "tokens": 310, "text": "..."}],
- "chunks": [{"label": "C1", "chunk_id": "docs:orders.md#h/orders-service/ports-and-health",
-             "doc_id": "docs:orders.md", "rag": "docs", "kind": "section", "uri": "orders.md",
-             "title": "...", "score": 0.91, "span": {"type": "line", "line_start": 4, "line_end": 9},
-             "tokens": 220, "text": "..."}],
- "input": {"text": "Question: ...", "tokens": 40, "dropped_templates": 0, "truncated": false},
- "rendered": {"messages": [{"role": "system", "content": "..."}, {"role": "user", "content": "..."}]},
- "citation": {"grammar": "root ::= ...", "json_schema": {"type": "object"}},
- "omitted": [{"chunk_id": "...", "reason": "budget"}],
- "debug": null}
-```
-
-Send `rendered.messages`, `citation.grammar` and `max_tokens` to the generator. Do not send `citation.json_schema` with the grammar.
-
-The `span` has one of three forms. A line span has `type` `line`, `line_start` and `line_end`. A page span has `type` `page`, `page_start`, `page_end`, `label_start` and `label_end`. A block span has `type` `block`, `block_start` and `block_end`.
-
-A PDF chunk has a `uri` that ends with `#page=N`.
-
-When `debug` is `true`, `debug` is a list. Each item has `chunk_id`, `rag`, `lexical_rank`, `dense_rank`, `exact_rank`, `rrf_score`, `rerank_score` and `rerank_truncated`.
-
-A context that uses a RAG with a `needs_rebuild` status returns 409. The `reason` of each omitted chunk is `budget`, `quota` or `duplicate`.
-
-### Query builder
-
-`POST /v1/query/build` shows the query that a builder makes from the input. It takes the same body as the search route. It returns the query only:
-
-```json
-{"lexical_terms": ["NullPointerException", "OrderService.java"], "dense_text": "...",
- "rerank_text": "...", "exact_lookups": [{"field": "path_name", "value": "orderservice.java"}]}
-```
-
-### Tokens
-
-`POST /v1/tokens/count` counts the tokens of a text with a generator tokenizer:
-
-```json
-{"text": "Hello world.", "generator": "ministral-3-3b"}
-```
-
-The response is `{"tokens": 3, "generator": "ministral-3-3b"}`. The `generator` field is optional. Its default is `ministral-3-3b`. An unknown generator returns 400.
-
-### Prompts
-
-`GET /v1/prompts/{name}/{version}` returns a pinned prompt. The `version` is an integer:
-
-```json
-{"id": "prompt:log-triage-system@1", "name": "log-triage-system", "version": 1, "text": "..."}
-```
-
-An unknown prompt returns 404. The API cannot add or change prompts.
-
-### Citations
-
-`POST /v1/citations/validate` checks an answer against the chunk list of its pack:
-
-```json
-{"answer": "{\"answer\": \"The port is 8080.\", \"citations\": [\"C1\"]}",
- "chunks": [{"label": "C1", "chunk_id": "docs:orders.md#h/orders-service/ports-and-health"}]}
+  -d '{"context": "ask-docs", "question": "Which port does the orders service use?", "chunks": 5}'
 ```
 
 The response:
 
 ```json
-{"valid": true, "problem": null, "answer": "{\"answer\": \"The port is 8080.\", \"citations\": [\"C1\"]}",
- "citations": [{"label": "C1", "chunk_id": "docs:orders.md#h/orders-service/ports-and-health",
-                "uri": "orders.md"}],
- "unknown_labels": [], "missing_chunks": []}
+{"chunks": [{
+   "chunk_id": "docs:orders.md#h/orders-service/database-timeouts",
+   "parent_id": null,
+   "kind": "section",
+   "score": 6.59,
+   "size_tokens": 37,
+   "header": "Orders service > Database timeouts",
+   "text": "A PSQLException with ...",
+   "source": {
+     "rag": "docs",
+     "doc_id": "docs:orders.md",
+     "source_kind": "markdown",
+     "uri": "orders.md",
+     "title": "Orders service",
+     "version": "4f2a9c1",
+     "span": {"type": "line", "line_start": 13, "line_end": 13}
+   },
+   "metadata": {"heading_level": 2}
+ }],
+ "omitted": [{"chunk_id": "docs:orders.md#h/orders-service/ports-and-health", "reason": "limit"}],
+ "debug": null}
 ```
 
-`problem` is `null` when the answer is valid. Otherwise it is one of these values:
+The rules of the result are these:
 
-- `not_json`: the answer is not valid JSON. An answer that the generator cut at `max_tokens` has this problem.
-- `bad_shape`: the JSON does not have a string `answer` and a list `citations` of strings.
-- `unknown_label`: a citation label is not in the `chunks` list. The list is in `unknown_labels`.
-- `missing_chunk`: a cited chunk no longer exists in any RAG. The IDs are in `missing_chunks`.
+- `chunks` is in rank order, best first. The `score` of a chunk is never higher than the score of the chunk before it.
+- `chunks` is an upper bound. Each RAG of the context gives at most its `keep` chunks, and the default `keep` is 8. A request for 10 chunks against one RAG with the default `keep` returns at most 8 chunks.
+- `omitted` lists the candidates that were found but not returned. The `reason` is `duplicate` or `limit`. The `duplicate` reason means that the chunk repeats the content of a better chunk, or that its chunk ID is already in the result. The `limit` reason means that the result is full. A candidate that the `keep` value of its RAG removes is not listed.
+- A chunk whose document is deleted while the request runs is left out. It is not listed in `omitted`.
+- `debug` is `null` unless `debug` is `true`. When it is set, `debug` is a list. Each item has `chunk_id`, `rag`, `lexical_rank`, `dense_rank`, `rrf_score`, `rerank_score` and `rerank_truncated`.
+- A context that uses a RAG with a `needs_rebuild` status returns 409.
 
-The `uri` of a citation is empty when the chunk does not exist.
+#### Chunk fields
+
+Each item of `chunks` and each hit of a search has these fields:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `chunk_id` | string | The stable ID of the chunk. Use it to find the chunk again. |
+| `parent_id` | string or `null` | The ID of the parent section. A JIRA comment has the `desc` chunk of its issue as its parent. Otherwise it is `null`. |
+| `kind` | string | `section`, `hunk`, `description`, `comment`, `prompt` or `page`. |
+| `score` | number | The rerank score when the RAG has a reranker. Otherwise the RRF score. A higher score is a better match. |
+| `size_tokens` | integer | The size of `header` and `text` with the size ruler of xat-rag. This is not a count of your LLM tokens. See [architecture](architecture.md#4-data-model). |
+| `header` | string | The heading path or the title of the chunk. Untrusted text. |
+| `text` | string | The stored text of the chunk. It has no tags and no escaping. Untrusted text. |
+| `source` | object | Where the chunk came from. See the next table. |
+| `metadata` | object | The metadata of the chunk. It has the fields that the parser wrote and the fields that the caller sent. Values are strings, integers, numbers or booleans. |
+
+The `source` object has these fields:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `rag` | string | The name of the RAG. |
+| `doc_id` | string | The document ID that the caller sent. |
+| `source_kind` | string | The kind of the document: `markdown`, `text`, `diff`, `jira`, `prompt`, `pdf`, `docx` or `html`. |
+| `uri` | string | The link that the caller sent. It is empty when the caller sent none. A PDF chunk ends with `#page=N`. |
+| `title` | string | The title of the document. |
+| `version` | string | The version that the caller sent for the document, for example a commit SHA. It is empty when the caller sent none. |
+| `span` | object | The part of the document that holds the chunk. See the next section. |
+
+The `metadata` object holds the parser fields. For example, the JIRA parser writes `jira_key`, `status`, `priority`, `labels` and `created`. The diff parser writes `path`, `path_name` and `change`. The markdown parser writes `heading_level`. The metadata also holds the fields that the caller sent in `metadata` of the upload. xat-rag does not filter on metadata in v0.1.
+
+#### Span
+
+The `span` has one of three forms:
+
+- A line span has `type` `line`, `line_start` and `line_end`.
+- A page span has `type` `page`, `page_start`, `page_end`, `label_start` and `label_end`.
+- A block span has `type` `block`, `block_start` and `block_end`.
+
+A PDF chunk has a `uri` that ends with `#page=N`. The page span gives the pages, and the `uri` gives the page to open first.
+
+### Query build
+
+`POST /v1/query/build` shows the query that a question makes. It takes the same body as the search route. It returns the query only:
+
+```json
+{"lexical_terms": ["NullPointerException", "OrderService.java"], "dense_text": "...",
+ "rerank_text": "..."}
+```
+
+`lexical_terms` has at most 32 terms. `rerank_text` has at most the first 600 characters of the question. `dense_text` has the whole question, after sanitizing. The embedder keeps only the part that fits its input.
 
 ## Upload format
 
@@ -287,7 +300,7 @@ Each object in the `documents` list has these fields:
 | `uri` | string, at most 2048 characters | No | A link to the source, for example a ticket URL. It goes into the result. |
 | `title` | string, at most 1024 characters | No | The title. A parser can use the title of the document when this is empty. |
 | `version` | string, at most 256 characters | No | A version, for example a commit SHA or the JIRA `updated` value. |
-| `metadata` | object of strings, integers, numbers and booleans | No | Metadata for exact lookups and filters. A JIRA parser sets `jira_key`, and a diff parser sets `path_name`. |
+| `metadata` | object of strings, integers, numbers and booleans | No | Metadata for the chunks of the document. It goes into the `metadata` of each chunk result. |
 
 Unknown fields are errors. A `kind` that the RAG has no source for is an error.
 
@@ -321,7 +334,6 @@ The service reads its settings from environment variables. The names are not cas
 | `XatRag__RecipesFolder` | Yes | (none) | The folder with `rags/*.toml` and `contexts/*.toml`. |
 | `XatRag__ModelsFolder` | Yes | (none) | The folder with the model files. |
 | `XatRag__LockFile` | Yes | (none) | The model lock file, `build/models.lock.json`. |
-| `XatRag__PromptsFolder` | No | (none) | The folder with the pinned prompts. |
 | `XatRag__ReadyFile` | No | (none) | The file that holds `{url, pid, version}` when the service is ready. The mode is `0600`. |
 | `XatRag__StopWhenInputCloses` | No | `false` | `true` stops the service when its standard input closes. |
 | `XatRag__QueueLimit` | No | `8` | The number of requests that can wait or run in the pool. From 1 to 1000. |
@@ -335,7 +347,7 @@ The service removes `LANGSMITH_*`, `LANGCHAIN_*` and each variable whose name en
 
 1. The service checks its settings and the access key.
 2. It takes the lock of the data folder. A second service with the same folder stops with an error.
-3. It loads the recipes, the prompts, the models and the indexes.
+3. It loads the recipes, the models and the indexes. A recipe with an unknown key stops the start, and the message names the field.
 4. It starts to listen. It writes the ready file. The ready file is deleted when the service stops.
 
 A ready file looks like this:
@@ -352,16 +364,14 @@ The service stops on `SIGINT`, on `SIGTERM`, or when standard input closes with 
 
 | Limit | Value | Result when passed |
 |---|---|---|
-| JSON request body (context, search, query build, tokens and citations) | 1 MiB | 413 |
+| JSON request body (context, search and query build) | 1 MiB | 413 |
 | Upload request | 64 MiB | 413 |
 | Documents in one upload | 256 | 400 |
 | Queued upload data in the service | 256 MiB | 503 `overloaded_error`, `Retry-After: 5` |
 | Requests in the pool | `XatRag__QueueLimit` (default 8) | 503 `overloaded_error`, `Retry-After: 1` |
 | `question` | 20000 characters | 400 |
-| `log_lines` | 2000 lines, each cut to 4096 characters | 400 for the count, cut for the length |
-| `answer` for citations | 1 MiB | 413 |
-| `chunks` for citations | 10000 items | 400 |
-| Stage times | Query build 200 ms, retrieve 500 ms, embed 1000 ms, rerank 2500 ms, pack 300 ms, in each recipe | 504 `stage_timeout_error` |
+| `chunks` | 1 to 100 | 400 |
+| Stage times | Query build 200 ms, retrieve 500 ms, embed 1000 ms, rerank 2500 ms, pack 300 ms, in each recipe. The `pack` stage is the merge of the RAG results. | 504 `stage_timeout_error` |
 
 The limits of the parsers are in the [architecture](architecture.md#5-ingestion-flow), section 5.
 
@@ -376,11 +386,22 @@ JOB=$(curl -s -X PUT "$URL/v1/rags/docs/documents" -H "Authorization: Bearer $KE
 curl -s "$URL/v1/jobs/$JOB" -H "Authorization: Bearer $KEY"
 ```
 
-Ask for a context pack, and then check the answer of the model:
+Ask for the ranked chunks of a question:
 
 ```bash
 curl -s -X POST "$URL/v1/context" -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
-  -d '{"context": "log-triage", "log_lines": ["ERROR [orders] OrderNotFoundException: order 9f1c"], "selected_lines": [0]}'
-curl -s -X POST "$URL/v1/citations/validate" -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
-  -d '{"answer": "{\"answer\": \"...\", \"citations\": [\"C1\"]}", "chunks": [{"label": "C1", "chunk_id": "docs:orders.md#h/orders-service/order-lookup-errors"}]}'
+  -d '{"context": "ask-docs", "question": "Which port does the orders service use?", "chunks": 5}'
 ```
+
+## Removed in this version
+
+These routes, fields, settings and error types are removed. A request that sends a removed field gets 400. A removed route gets 404. See the [changelog](../CHANGELOG.md).
+
+- Routes: `POST /v1/tokens/count`, `GET /v1/prompts/{name}/{version}` and `POST /v1/citations/validate`.
+- Fields of `POST /v1/context`: `log_lines`, `selected_lines`, `reserved_output` and `input_max_tokens`.
+- Fields of `POST /v1/rags/{rag}/search` and `POST /v1/query/build`: `builder` and `log_lines`.
+- Fields of the response of `POST /v1/context`: `pack_id`, `generator`, `max_tokens`, `budget`, `pinned`, `input`, `rendered` and `citation`. The chunk fields `label`, `tokens`, `doc_id`, `rag`, `uri`, `title` and `span` moved into `source` or were renamed.
+- Omitted reasons `budget` and `quota`.
+- Debug field `exact_rank`, and the query field `exact_lookups`.
+- Error type `context_too_large_error` (422).
+- Setting `XatRag__PromptsFolder`.

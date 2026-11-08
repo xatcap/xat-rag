@@ -112,7 +112,7 @@ def _call(
 
 
 def smoke_test() -> None:
-    """Start the frozen service with the fixture setup, ingest one document, and make a context pack."""
+    """Start the frozen service with the fixture setup, ingest one document, and make a retrieval result."""
     binary = DIST / ("xat-rag-service.exe" if os.name == "nt" else "xat-rag-service")
     key = secrets.token_hex(16)
     with tempfile.TemporaryDirectory() as folder:
@@ -122,7 +122,6 @@ def smoke_test() -> None:
         env |= {
             "XatRag__DataFolder": str(work / "data"),
             "XatRag__RecipesFolder": str(SETUP / "recipes"),
-            "XatRag__PromptsFolder": str(SETUP / "prompts"),
             "XatRag__ModelsFolder": str(ROOT / "models"),
             "XatRag__LockFile": str(ROOT / "build" / "models.lock.json"),
             "XatRag__ReadyFile": str(work / "ready.json"),
@@ -167,11 +166,12 @@ def smoke_test() -> None:
                 time.sleep(0.1)
             assert state["status"] == "done", state
             question = json.dumps({"context": "ask-docs", "question": "Which port do orders use?"}).encode()
-            status, pack = _call(url, "/v1/context", key, body=question, method="POST")
-            assert status == 200, pack
-            assert pack["chunks"][0]["chunk_id"] == "docs:orders.md#h/orders-service/ports-and-health", pack["chunks"][
-                0
-            ]
+            status, result = _call(url, "/v1/context", key, body=question, method="POST")
+            assert status == 200, result
+            first = result["chunks"][0]
+            assert first["chunk_id"] == "docs:orders.md#h/orders-service/ports-and-health", first
+            assert first["source"]["doc_id"] == "docs:orders.md", first
+            assert first["source"]["span"]["type"] == "line", first
             print("smoke test passed")
         finally:
             assert process.stdin is not None

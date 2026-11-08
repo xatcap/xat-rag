@@ -1,6 +1,6 @@
 """`RagIndex`: one RAG.
 
-Ingestion: parse, chunk, embed, store. Retrieval: lexical, dense and exact search, RRF, rerank, MMR.
+Ingestion: parse, chunk, embed, store. Retrieval: lexical and dense search, RRF, rerank, MMR.
 """
 
 import time
@@ -18,6 +18,7 @@ from xat_rag_core.mmr import mmr_order, remove_duplicates
 from xat_rag_core.model import Candidate, Chunk, RawDocument, SourceKind, StageScores
 from xat_rag_core.parsing import Deadline, SectionParser
 from xat_rag_core.query import RetrievalQuery
+from xat_rag_core.ranking import final_score
 from xat_rag_core.tracing import no_tracing
 from xat_rag_documents import DocumentLimits, DocxParser, HtmlParser, PdfParser
 from xat_rag_onnx import OnnxCrossEncoderCompressor, OnnxEmbeddings, OnnxModel
@@ -33,7 +34,7 @@ from xat_rag_parsers import (
 from xat_rag_parsers.chunker import SPLITTER_VERSION
 from xat_rag_sqlite.lexical import LEXICAL_TOKENIZER_ID
 from xat_rag_sqlite.manifest import EmbedderInfo, IndexManifest
-from xat_rag_sqlite.retrievers import ExactLookupRetriever, Fts5Retriever, VecRetriever
+from xat_rag_sqlite.retrievers import Fts5Retriever, VecRetriever
 from xat_rag_sqlite.store import SqliteRagStore, UpsertStatus
 from xat_rag_tokenizers import HfTokenCounter
 
@@ -141,7 +142,7 @@ class RagIndex:
                 document_prefix=embedder.document_prefix,
             ),
             lexical_tokenizer=LEXICAL_TOKENIZER_ID,
-            generator_tokenizer_id=tokenizer_id,
+            size_tokenizer_id=tokenizer_id,
             index_hash=recipe.index_hash(),
             chunkers={kind: chunker_version(make_parser(kind, recipe, None)) for kind in kinds},
         )
@@ -198,33 +199,28 @@ class RagIndex:
     # Retrieval.
 
     def retrieve(self, query: RetrievalQuery, limits: Limits) -> Retrieved:
-        """Run the lexical, dense and exact searches, fuse them with RRF, rerank, and choose with MMR."""
+        """Run the lexical and dense searches, fuse them with RRF, rerank, and choose with MMR."""
         settings = self.recipe.retrieval
         with no_tracing():
             timer = _Timer("retrieve", limits.retrieve)
             lexical = Fts5Retriever(store=self.store, k=settings.lexical_k, filters=query.filters).invoke(
                 " ".join(query.lexical_terms), config=_NO_CALLBACKS
             )
-            exact = ExactLookupRetriever(
-                store=self.store, lookups=query.exact_lookups, k=settings.exact_k, filters=query.filters
-            ).invoke("", config=_NO_CALLBACKS)
             timer.check()
             timer = _Timer("embed", limits.embed)
             dense = VecRetriever(
                 store=self.store, embeddings=self._embedder, k=settings.dense_k, filters=query.filters
             ).invoke(query.dense_text, config=_NO_CALLBACKS)
             timer.check()
-            candidates = self._fuse(lexical, dense, exact)[: settings.rerank_candidates]
+            candidates = self._fuse(lexical, dense)[: settings.rerank_candidates]
             if self._reranker is not None and candidates:
                 timer = _Timer("rerank", limits.rerank)
                 candidates = self._rerank(candidates, query.rerank_text or query.dense_text)
                 timer.check()
         return self._choose(candidates)
 
-    def _fuse(
-        self, lexical: Sequence[Document], dense: Sequence[Document], exact: Sequence[Document]
-    ) -> list[Candidate]:
-        lists = {"exact": exact, "lexical": lexical, "dense": dense}
+    def _fuse(self, lexical: Sequence[Document], dense: Sequence[Document]) -> list[Candidate]:
+        lists = {"lexical": lexical, "dense": dense}
         by_id: dict[str, Chunk] = {}
         for documents in lists.values():
             for document in documents:
@@ -239,7 +235,6 @@ class RagIndex:
                 StageScores(
                     lexical_rank=item.ranks.get("lexical"),
                     dense_rank=item.ranks.get("dense"),
-                    exact_rank=item.ranks.get("exact"),
                     rrf_score=item.score,
                 ),
             )
@@ -268,16 +263,9 @@ class RagIndex:
         kept = remove_duplicates([c.chunk.content_hash for c in candidates], vectors)
         kept_set = set(kept)
         duplicates = tuple(ids[i] for i in range(len(ids)) if i not in kept_set)
-        relevance = [_relevance(candidates[i]) for i in kept]
+        relevance = [final_score(candidates[i]) for i in kept]
         order = mmr_order(relevance, vectors[kept], self.recipe.retrieval.keep, self.recipe.retrieval.mmr_lambda)
         return Retrieved(tuple(candidates[kept[i]] for i in order), duplicates)
-
-
-def _relevance(candidate: Candidate) -> float:
-    scores = candidate.scores
-    if scores.rerank_score is not None:
-        return scores.rerank_score
-    return scores.rrf_score or 0.0
 
 
 def source_kind(value: str) -> SourceKind:

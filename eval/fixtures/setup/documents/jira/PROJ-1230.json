@@ -1,0 +1,1 @@
+{"key": "PROJ-1230", "fields": {"summary": "Export of order reports is slow", "description": "The nightly order report export takes two hours. The query has no index on the order date.", "status": {"name": "Open"}}}

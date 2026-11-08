@@ -1,10 +1,9 @@
 """The public result types of the xat-rag library. They hold no LangChain types (ADR 0001)."""
 
-from dataclasses import dataclass, field
-from typing import Any
+from collections.abc import Mapping
+from dataclasses import dataclass
 
-from xat_rag_core.model import SkippedPage, Span
-from xat_rag_core.render import ChatMessage
+from xat_rag_core.model import Scalar, SkippedPage, Span, StageScores
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,59 +24,44 @@ class DocumentResult:
 
 
 @dataclass(frozen=True, slots=True)
-class PackedChunk:
-    """One chunk in a context pack, with its label."""
+class ChunkSource:
+    """Where a chunk came from, and where to open it."""
 
-    label: str
-    chunk_id: str
-    doc_id: str
     rag: str
-    kind: str
+    doc_id: str
+    source_kind: str
     uri: str
     title: str
-    score: float
+    version: str
     span: Span
-    tokens: int
-    text: str
 
 
 @dataclass(frozen=True, slots=True)
-class PinnedItem:
-    """A pinned prompt in a context pack."""
+class RetrievedChunk:
+    """One retrieved chunk. `size_tokens` comes from the size ruler of xat-rag, not from the LLM of the app."""
 
-    prompt_id: str
-    tokens: int
+    chunk_id: str
+    parent_id: str | None
+    kind: str
+    score: float
+    size_tokens: int
+    header: str
     text: str
+    source: ChunkSource
+    metadata: Mapping[str, Scalar]
 
 
 @dataclass(frozen=True, slots=True)
-class InputReport:
-    """The input section of a context pack."""
+class SearchHit:
+    """One result of a search in one RAG, with the scores of each stage."""
 
-    text: str
-    tokens: int
-    dropped_templates: int = 0
-    truncated: bool = False
-
-
-@dataclass(frozen=True, slots=True)
-class BudgetReport:
-    """How the window is used. `chunks` is the number of tokens that the packed chunks use."""
-
-    window: int
-    reserved_output: int
-    overhead: int
-    pinned: int
-    input: int
-    chunks: int
-    margin: int
-    unused: int
-    floors_lowered: bool
+    chunk: RetrievedChunk
+    scores: StageScores
 
 
 @dataclass(frozen=True, slots=True)
 class OmittedItem:
-    """A candidate that is not in the pack, and why: `budget`, `quota` or `duplicate`."""
+    """A candidate that is not in the result, and why: `duplicate` or `limit`."""
 
     chunk_id: str
     reason: str
@@ -91,25 +75,15 @@ class DebugCandidate:
     rag: str
     lexical_rank: int | None
     dense_rank: int | None
-    exact_rank: int | None
     rrf_score: float | None
     rerank_score: float | None
     rerank_truncated: bool
 
 
 @dataclass(frozen=True, slots=True)
-class ContextPack:
-    """The result of a context request. The app sends `messages` and `grammar` to the generator."""
+class RetrievalResult:
+    """The result of a context request. `chunks` is in rank order, best first."""
 
-    pack_id: str
-    generator: str
-    max_tokens: int
-    budget: BudgetReport
-    pinned: tuple[PinnedItem, ...]
-    chunks: tuple[PackedChunk, ...]
-    input: InputReport
-    messages: tuple[ChatMessage, ...]
-    grammar: str
-    json_schema: dict[str, Any] = field(default_factory=dict[str, Any])
+    chunks: tuple[RetrievedChunk, ...]
     omitted: tuple[OmittedItem, ...] = ()
     debug: tuple[DebugCandidate, ...] | None = None

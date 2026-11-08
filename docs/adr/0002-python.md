@@ -4,6 +4,8 @@
 - Date: 2026-11-07
 - Deciders: Project maintainer
 
+> Note (2026-11-09): The log query builder that this ADR names was removed. See [ADR 0013](0013-remove-log-handling-and-exact-lookups.md).
+
 ## Context
 
 xat-rag needs good retrieval tools, and it can use any stack. The apps call xat-rag through a loopback HTTP API (see [ADR 0003](0003-library-and-loopback-service.md)), so the language of the app does not matter.

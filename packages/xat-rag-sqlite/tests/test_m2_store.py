@@ -5,10 +5,10 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from test_store import DIMS, EMBED, CountingEmbedder, chunk, document, manifest, upsert
+from test_store import DIMS, EMBED, CountingEmbedder, chunk, document, manifest, stored_field_chunks, upsert
 from xat_rag_core.errors import InternalError, ServiceUnavailableError
 from xat_rag_core.model import Scalar
-from xat_rag_core.query import Equals, ExactLookup, Filter, OneOf, Range
+from xat_rag_core.query import Equals, Filter, OneOf, Range
 from xat_rag_sqlite.lexical import match_expression
 from xat_rag_sqlite.store import SqliteRagStore, UpsertPlan, UpsertStatus
 
@@ -38,7 +38,7 @@ def _state(store: SqliteRagStore) -> tuple[tuple[int, int], set[str], set[str], 
         store.counts(),
         _lexical(store, "alpha"),
         _vector(store, 100),
-        {c.chunk_id for c in store.exact_lookup([ExactLookup("tag", "t")], 100, Filter())},
+        set(stored_field_chunks(store, "tag", "t")),
     )
 
 
@@ -69,7 +69,7 @@ def test_readers_query_while_a_writer_upserts(store: SqliteRagStore) -> None:
                 counts.append(store.counts()[1])
                 _lexical(store, "alpha")
                 _vector(store, 5)
-                store.exact_lookup([ExactLookup("tag", "t")], 5, Filter())
+                _vector(store, 5, Filter((Equals("tag", "t"),)))
         except BaseException as error:
             errors.append(error)
         seen_counts.append(counts)
@@ -293,31 +293,40 @@ def test_filter_values_with_sql_text_are_plain_values(store: SqliteRagStore) -> 
     assert store.counts() == (5, 5)
 
 
-# Exact lookup.
+# Metadata fields.
 
 
-def test_exact_lookup_with_filters(store: SqliteRagStore) -> None:
-    _add(store, "d:1", "a", jira_key="P-1", project="shop", priority=1)
-    _add(store, "d:2", "b", jira_key="P-2", project="billing", priority=2)
-    _add(store, "d:3", "c", jira_key="P-3", project="shop", priority=3)
-    lookups = [ExactLookup("jira_key", "P-1"), ExactLookup("jira_key", "P-2"), ExactLookup("jira_key", "P-3")]
-    assert [h.chunk_id for h in store.exact_lookup(lookups, 10, Filter())] == ["d:1#c", "d:2#c", "d:3#c"]
-    shop = store.exact_lookup(lookups, 10, Filter((Equals("project", "shop"),)))
-    assert [h.chunk_id for h in shop] == ["d:1#c", "d:3#c"]
-    narrow = store.exact_lookup(lookups, 10, Filter((Equals("project", "shop"), Range("priority", minimum=2))))
-    assert [h.chunk_id for h in narrow] == ["d:3#c"]
-    assert store.exact_lookup(lookups, 10, Filter((Equals("project", "none"),))) == []
-
-
-def test_exact_lookup_edges(store: SqliteRagStore) -> None:
+def test_metadata_fields_are_stored_for_each_chunk_and_are_case_sensitive(store: SqliteRagStore) -> None:
     _add(store, "d:1", "a", jira_key="P-1", path_name="a.java")
     _add(store, "d:2", "b", jira_key="P-2", path_name="a.java")
-    assert store.exact_lookup([], 5, Filter()) == []
-    assert len(store.exact_lookup([ExactLookup("path_name", "a.java")], 1, Filter())) == 1
-    same_twice = [ExactLookup("jira_key", "P-1"), ExactLookup("jira_key", "P-1")]
-    assert [h.chunk_id for h in store.exact_lookup(same_twice, 5, Filter())] == ["d:1#c"]
-    assert store.exact_lookup([ExactLookup("jira_key", "p-1")], 5, Filter()) == []
-    assert store.exact_lookup([ExactLookup("missing", "x")], 5, Filter()) == []
+    assert stored_field_chunks(store, "path_name", "a.java") == ["d:1#c", "d:2#c"]
+    assert stored_field_chunks(store, "jira_key", "P-1") == ["d:1#c"]
+    assert stored_field_chunks(store, "jira_key", "p-1") == []
+    assert stored_field_chunks(store, "missing", "x") == []
+    assert _ids(store, Filter((Equals("jira_key", "p-1"),))) == set()
+
+
+def test_filters_on_metadata_fields_work_in_both_searches(store: SqliteRagStore) -> None:
+    _add(store, "d:1", "alpha one", jira_key="P-1", project="shop", priority=1)
+    _add(store, "d:2", "alpha two", jira_key="P-2", project="billing", priority=2)
+    _add(store, "d:3", "alpha three", jira_key="P-3", project="shop", priority=3)
+    shop = Filter((Equals("project", "shop"),))
+    narrow = Filter((Equals("project", "shop"), Range("priority", minimum=2)))
+    keys = Filter((OneOf("jira_key", ("P-1", "P-2")),))
+    assert _lexical(store, "alpha", shop) == _vector(store, 10, shop) == {"d:1#c", "d:3#c"}
+    assert _lexical(store, "alpha", narrow) == _vector(store, 10, narrow) == {"d:3#c"}
+    assert _lexical(store, "alpha", keys) == _vector(store, 10, keys) == {"d:1#c", "d:2#c"}
+    none = Filter((Equals("project", "none"),))
+    assert _lexical(store, "alpha", none) == _vector(store, 10, none) == set()
+
+
+def test_changed_metadata_leaves_no_old_value_in_the_fields_table(store: SqliteRagStore) -> None:
+    _add(store, "d:1", "alpha", jira_key="P-1", old_field="x")
+    embedder = CountingEmbedder()
+    upsert(store, document("d:1", "alpha"), [chunk("d:1", "c", "alpha", jira_key="P-9")], embedder)
+    assert stored_field_chunks(store, "jira_key", "P-1") == []
+    assert stored_field_chunks(store, "jira_key", "P-9") == ["d:1#c"]
+    assert stored_field_chunks(store, "old_field", "x") == []
 
 
 # Dense search edges.

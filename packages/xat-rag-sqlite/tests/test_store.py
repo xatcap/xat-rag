@@ -9,7 +9,7 @@ from langchain_core.embeddings import DeterministicFakeEmbedding
 from xat_rag_core.errors import IndexMismatchError, InternalError
 from xat_rag_core.ids import chunk_content_hash
 from xat_rag_core.model import Chunk, LineSpan, Scalar, SourceDocument, SourceKind
-from xat_rag_core.query import Equals, ExactLookup, Filter, OneOf, Range
+from xat_rag_core.query import Equals, Filter, OneOf, Range
 from xat_rag_sqlite.lexical import match_expression
 from xat_rag_sqlite.manifest import EmbedderInfo, IndexManifest
 from xat_rag_sqlite.store import SqliteRagStore, UpsertStatus
@@ -23,7 +23,7 @@ def manifest(**changes: object) -> IndexManifest:
         "rag": "jira",
         "embedder": EmbedderInfo("fake", "0" * 64, DIMS),
         "lexical_tokenizer": "code-v1",
-        "generator_tokenizer_id": "tekken@test",
+        "size_tokenizer_id": "tekken@test",
         "index_hash": "h1",
         "chunkers": {"jira": "jira-v1"},
     }
@@ -71,6 +71,25 @@ def store(tmp_path: Path) -> SqliteRagStore:
     return SqliteRagStore(tmp_path / "jira.sqlite", manifest())
 
 
+def stored_field_chunks(store: SqliteRagStore, field: str, value: object) -> list[str]:
+    """Return the IDs of the chunks that have a metadata field value, read from the `chunk_fields` table."""
+    db = sqlite3.connect(store.path)
+    try:
+        rows = db.execute(
+            "SELECT c.chunk_id FROM chunk_fields f JOIN chunks c ON c.id = f.chunk_rowid "
+            "WHERE f.field = ? AND f.value = ? ORDER BY c.chunk_id",
+            (field, value),
+        ).fetchall()
+    finally:
+        db.close()
+    return [row[0] for row in rows]
+
+
+def filtered_ids(store: SqliteRagStore, *conditions: Equals | OneOf | Range) -> set[str]:
+    """Return the IDs of the chunks that pass a filter in a dense search of the whole store."""
+    return {c.chunk_id for c in store.search_vector(np.ones(DIMS, dtype=np.float32), 100, Filter(conditions))}
+
+
 def test_unchanged_content_makes_no_new_embeddings(store: SqliteRagStore) -> None:
     embedder = CountingEmbedder()
     chunks = [chunk("jira:P-1", "desc", "OrderService fails"), chunk("jira:P-1", "comment/1", "fixed in 4f2a9c1")]
@@ -99,8 +118,10 @@ def test_metadata_change_updates_without_embedding(store: SqliteRagStore) -> Non
     upsert(store, document("jira:P-1", "b"), [chunk("jira:P-1", "desc", "t", status="done")], embedder)
     assert embedder.calls == 1
     assert store.get_chunks(["jira:P-1#desc"])["jira:P-1#desc"].metadata == {"status": "done"}
-    assert [c.chunk_id for c in store.exact_lookup([ExactLookup("status", "done")], 5, Filter())] == ["jira:P-1#desc"]
-    assert store.exact_lookup([ExactLookup("status", "open")], 5, Filter()) == []
+    assert filtered_ids(store, Equals("status", "done")) == {"jira:P-1#desc"}
+    assert filtered_ids(store, Equals("status", "open")) == set()
+    assert stored_field_chunks(store, "status", "done") == ["jira:P-1#desc"]
+    assert stored_field_chunks(store, "status", "open") == []
 
 
 def test_delete_removes_from_every_search(store: SqliteRagStore) -> None:
@@ -114,7 +135,8 @@ def test_delete_removes_from_every_search(store: SqliteRagStore) -> None:
     assert expression is not None
     assert store.search_lexical(expression, 5, Filter()) == []
     assert store.search_vector(np.ones(DIMS, dtype=np.float32), 5, Filter()) == []
-    assert store.exact_lookup([ExactLookup("jira_key", "P-1")], 5, Filter()) == []
+    assert filtered_ids(store, Equals("jira_key", "P-1")) == set()
+    assert stored_field_chunks(store, "jira_key", "P-1") == []
     store.checkpoint()
     assert store.counts() == (0, 0)
 
@@ -143,16 +165,31 @@ def test_searches_and_filters_before_the_cut(store: SqliteRagStore) -> None:
     assert unfiltered[0].chunk_id == "jira:P-4#desc"
 
 
-def test_exact_lookup_ranks_by_matches(store: SqliteRagStore) -> None:
+def test_document_versions_returns_the_stored_version_of_known_documents(store: SqliteRagStore) -> None:
     embedder = CountingEmbedder()
-    upsert(
-        store, document("jira:P-1", "a"), [chunk("jira:P-1", "desc", "x", jira_key="P-1", path_name="a.java")], embedder
-    )
-    upsert(
-        store, document("jira:P-2", "b"), [chunk("jira:P-2", "desc", "y", jira_key="P-2", path_name="a.java")], embedder
-    )
-    hits = store.exact_lookup([ExactLookup("jira_key", "P-2"), ExactLookup("path_name", "a.java")], 5, Filter())
-    assert [hit.chunk_id for hit in hits] == ["jira:P-2#desc", "jira:P-1#desc"]
+    first = SourceDocument("jira:P-1", "jira", SourceKind.JIRA, "https://jira/P-1", "P-1", "v7", "a")
+    second = SourceDocument("jira:P-2", "jira", SourceKind.JIRA, "https://jira/P-2", "P-2", "", "b")
+    upsert(store, first, [chunk("jira:P-1", "desc", "x")], embedder)
+    upsert(store, second, [chunk("jira:P-2", "desc", "y")], embedder)
+    assert store.document_versions(["jira:P-1", "jira:P-2", "jira:P-1", "unknown"]) == {
+        "jira:P-1": "v7",
+        "jira:P-2": "",
+    }
+    assert store.document_versions([]) == {}
+    assert store.document_versions(f"missing-{i}" for i in range(2000)) == {}
+
+
+def test_a_new_version_replaces_the_stored_version(store: SqliteRagStore) -> None:
+    embedder = CountingEmbedder()
+    old = SourceDocument("jira:P-1", "jira", SourceKind.JIRA, "https://jira/P-1", "P-1", "v1", "a")
+    new = SourceDocument("jira:P-1", "jira", SourceKind.JIRA, "https://jira/P-1", "P-1", "v2", "b")
+    upsert(store, old, [chunk("jira:P-1", "desc", "x")], embedder)
+    upsert(store, new, [chunk("jira:P-1", "desc", "y")], embedder)
+    assert store.document_versions(["jira:P-1"]) == {"jira:P-1": "v2"}
+
+
+def test_the_store_has_no_exact_lookup() -> None:
+    assert not hasattr(SqliteRagStore, "exact_lookup")
 
 
 def test_manifest_mismatch_is_refused(tmp_path: Path) -> None:
@@ -220,7 +257,7 @@ def test_bad_k_is_refused(store: SqliteRagStore) -> None:
     with pytest.raises(InternalError):
         store.search_vector(np.ones(DIMS, dtype=np.float32), 5000, Filter())
     with pytest.raises(InternalError):
-        store.exact_lookup([ExactLookup("a", "b")], 0, Filter())
+        store.search_vector(np.ones(DIMS, dtype=np.float32), 0, Filter())
 
 
 def test_failed_open_closes_the_writer(tmp_path: Path) -> None:

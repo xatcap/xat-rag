@@ -26,7 +26,6 @@ class ServiceSettings:
     recipes_folder: Path
     models_folder: Path
     lock_file: Path
-    prompts_folder: Path | None
     ready_file: Path | None
     stop_when_input_closes: bool
     queue_limit: int
@@ -69,7 +68,6 @@ def parse_listen(url: str) -> Listen:
 
 def read_settings(environ: Mapping[str, str]) -> ServiceSettings:
     """Read the settings. Raise `ConfigError` with an actionable message on a problem."""
-    prompts = _get(environ, "PromptsFolder")
     ready = _get(environ, "ReadyFile")
     try:
         queue_limit = int(_get(environ, "QueueLimit") or "8")
@@ -84,7 +82,6 @@ def read_settings(environ: Mapping[str, str]) -> ServiceSettings:
         recipes_folder=_required(environ, "RecipesFolder"),
         models_folder=_required(environ, "ModelsFolder"),
         lock_file=_required(environ, "LockFile"),
-        prompts_folder=Path(prompts) if prompts else None,
         ready_file=Path(ready) if ready else None,
         stop_when_input_closes=(_get(environ, "StopWhenInputCloses") or "").lower() == "true",
         queue_limit=queue_limit,

@@ -25,7 +25,7 @@ LangChain community loaders (`PyPDFLoader`, `Docx2txtLoader` and others) take pa
 - **Not used:** html2text (GPL-3.0), PyMuPDF and pymupdf4llm (AGPL), Unstructured (sends analytics on import), docling (downloads models, needs torch), `docx2txt` (loses headings), and all community loaders.
 - **Upload:** `multipart/form-data`. Limits: 64 MiB for each request, 32 MiB for each PDF or DOCX document and 8 MiB for each HTML document.
 - **Order:** parse, then sanitize, then chunk. The `content_hash` of the document is the hash of the raw bytes.
-- **Spans and chunk IDs:** `PageSpan` for PDF, `BlockSpan` for DOCX and `LineSpan` (lines of the HTML source) for HTML. Chunk IDs use the heading path, or for a PDF with no outline, the absolute page number. The citation check adds `#page=N` to PDF URIs.
+- **Spans and chunk IDs:** `PageSpan` for PDF, `BlockSpan` for DOCX and `LineSpan` (lines of the HTML source) for HTML. Chunk IDs use the heading path, or for a PDF with no outline, the absolute page number. The citation check adds `#page=N` to PDF URIs. Since [ADR 0014](0014-retrieval-only-and-app-side-fitting.md), the retrieval result adds this suffix, and the citation check is removed.
 - **Scanned PDFs:** index the pages with at least `min_page_chars` non-space characters (default 20). Report `pages_total`, `pages_indexed` and `skipped_pages` (page reason `no_text`). Fail the document with `no_text_layer` only when no page has text.
 - **Refused documents:** encrypted PDFs (`encrypted`), and DOCX documents with macros (`unsupported_media_type`). xat-rag finds macros by the content type and a `vbaProject.bin` part, not by the file name.
 - **Hidden text:** the DOCX parser removes hidden text (`w:vanish`). The HTML parser removes hidden elements. Invisible PDF text is not detected in v1.
@@ -43,7 +43,7 @@ LangChain community loaders (`PyPDFLoader`, `Docx2txtLoader` and others) take pa
 - No extra processes, so packaging stays simple.
 - A document that makes a parser loop can block ingestion until the service restarts. A document that uses too much memory can stop the whole service, because there is no memory limit. The index stays correct, because writes are atomic.
 - pypdf holds the GIL during a long page, so context requests can be slow and their stage time limits can fire late.
-- Invisible PDF text can carry prompt injection. Delimiters and citation checks reduce the risk ([ADR 0010](0010-untrusted-content-privacy-and-ingestion.md)).
+- Invisible PDF text can carry prompt injection. The app must escape the text and check the citations to reduce the risk ([ADR 0010](0010-untrusted-content-privacy-and-ingestion.md), [ADR 0014](0014-retrieval-only-and-app-side-fitting.md)).
 - `lxml` is a native library. It must be signed and notarized with the app.
 - pypdf security fixes must be applied at once, outside the monthly upgrade batch.
 - Tables in PDF files become plain text. This can lower retrieval quality for table data.

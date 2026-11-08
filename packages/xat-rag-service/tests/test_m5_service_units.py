@@ -1,6 +1,7 @@
 """Milestone 5 unit tests of the service: settings, upload parsing, jobs, the limiter and helpers. No models needed."""
 
 import asyncio
+import dataclasses
 import json
 import logging
 import threading
@@ -11,7 +12,7 @@ from typing import cast
 
 import pytest
 from xat_rag import XatRag
-from xat_rag.types import DocumentResult
+from xat_rag.types import ChunkSource, DebugCandidate, DocumentResult, OmittedItem, RetrievalResult, RetrievedChunk
 from xat_rag_core.errors import (
     ConfigError,
     InternalError,
@@ -23,10 +24,11 @@ from xat_rag_core.errors import (
     XatRagError,
 )
 from xat_rag_core.model import BlockSpan, LineSpan, PageSpan, RawDocument, SkippedPage, SourceKind
+from xat_rag_core.query import RetrievalQuery
 from xat_rag_service.app import Limiter, create_app, error_response
 from xat_rag_service.jobs import Job, JobManager, JobStatus
 from xat_rag_service.run import lock_data_folder, write_ready_file
-from xat_rag_service.serialize import document_result_json, span_json
+from xat_rag_service.serialize import chunk_json, document_result_json, query_json, result_json, span_json
 from xat_rag_service.settings import Listen, parse_listen, read_settings
 from xat_rag_service.uploads import MAX_DOCUMENTS, DocumentFields, Upload, raw_documents, read_upload
 
@@ -44,7 +46,7 @@ def test_settings_defaults() -> None:
     settings = read_settings(REQUIRED)
     assert settings.listen == Listen("127.0.0.1", 0, None)
     assert (settings.queue_limit, settings.threads) == (8, 0)
-    assert settings.prompts_folder is None
+    assert not hasattr(settings, "prompts_folder")
     assert settings.ready_file is None
     assert settings.stop_when_input_closes is False
     assert settings.data_folder == Path("/data")
@@ -102,9 +104,10 @@ def test_stop_when_input_closes_is_true_only_for_the_word_true(value: str, expec
     assert read_settings({**REQUIRED, "XatRag__StopWhenInputCloses": value}).stop_when_input_closes is expected
 
 
-def test_an_empty_prompts_folder_setting_means_no_prompts() -> None:
-    assert read_settings({**REQUIRED, "XatRag__PromptsFolder": ""}).prompts_folder is None
-    assert read_settings({**REQUIRED, "XatRag__PromptsFolder": "/p"}).prompts_folder == Path("/p")
+def test_the_prompts_folder_setting_is_gone() -> None:
+    settings = read_settings({**REQUIRED, "XatRag__PromptsFolder": "/p"})
+    assert not hasattr(settings, "prompts_folder")
+    assert "prompts_folder" not in {field.name for field in dataclasses.fields(settings)}
 
 
 # The listen setting.
@@ -820,3 +823,74 @@ def test_span_and_result_json() -> None:
 
 def test_xat_rag_error_base_class_is_exported_for_the_handlers() -> None:
     assert issubclass(ConfigError, XatRagError)
+
+
+def _chunk(**changes: object) -> RetrievedChunk:
+    source = ChunkSource("docs", "d1", "pdf", "a/b.pdf#page=2", "Title", "v1", PageSpan(2, 3, "ii", "iii"))
+    values: dict[str, object] = {
+        "chunk_id": "d1#a",
+        "parent_id": None,
+        "kind": "page",
+        "score": 0.5,
+        "size_tokens": 7,
+        "header": "H",
+        "text": "T",
+        "source": source,
+        "metadata": {"team": "core", "n": 3, "ok": True},
+    }
+    values.update(changes)
+    return RetrievedChunk(**values)  # type: ignore[arg-type]
+
+
+def test_chunk_json_has_the_chunk_form() -> None:
+    assert chunk_json(_chunk()) == {
+        "chunk_id": "d1#a",
+        "parent_id": None,
+        "kind": "page",
+        "score": 0.5,
+        "size_tokens": 7,
+        "header": "H",
+        "text": "T",
+        "source": {
+            "rag": "docs",
+            "doc_id": "d1",
+            "source_kind": "pdf",
+            "uri": "a/b.pdf#page=2",
+            "title": "Title",
+            "version": "v1",
+            "span": {
+                "type": "page",
+                "page_start": 2,
+                "page_end": 3,
+                "label_start": "ii",
+                "label_end": "iii",
+            },
+        },
+        "metadata": {"team": "core", "n": 3, "ok": True},
+    }
+
+
+def test_result_json_has_chunks_omitted_and_debug() -> None:
+    plain = result_json(RetrievalResult((_chunk(),), (OmittedItem("x#1", "limit"), OmittedItem("x#2", "duplicate"))))
+    assert set(plain) == {"chunks", "omitted", "debug"}
+    assert plain["omitted"] == [{"chunk_id": "x#1", "reason": "limit"}, {"chunk_id": "x#2", "reason": "duplicate"}]
+    assert plain["debug"] is None
+    debug = result_json(RetrievalResult((), (), (DebugCandidate("c", "docs", 1, None, 0.1, 0.2, False),)))
+    assert debug["debug"] == [
+        {
+            "chunk_id": "c",
+            "rag": "docs",
+            "lexical_rank": 1,
+            "dense_rank": None,
+            "rrf_score": 0.1,
+            "rerank_score": 0.2,
+            "rerank_truncated": False,
+        }
+    ]
+    assert result_json(RetrievalResult(()))["debug"] is None
+    json.dumps(plain)
+
+
+def test_query_json_has_the_three_texts_and_no_lookups() -> None:
+    data = query_json(RetrievalQuery(("a", "b"), "dense", "rerank"))
+    assert data == {"lexical_terms": ["a", "b"], "dense_text": "dense", "rerank_text": "rerank"}

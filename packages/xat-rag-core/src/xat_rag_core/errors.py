@@ -16,7 +16,6 @@ class ErrorType(StrEnum):
     AUTHENTICATION = "authentication_error"
     NOT_FOUND = "not_found_error"
     INDEX_MISMATCH = "index_mismatch_error"
-    CONTEXT_TOO_LARGE = "context_too_large_error"
     SERVICE_UNAVAILABLE = "service_unavailable_error"
     OVERLOADED = "overloaded_error"
     STAGE_TIMEOUT = "stage_timeout_error"
@@ -30,7 +29,6 @@ HTTP_STATUS: Mapping[ErrorType, int] = MappingProxyType(
         ErrorType.AUTHENTICATION: 401,
         ErrorType.NOT_FOUND: 404,
         ErrorType.INDEX_MISMATCH: 409,
-        ErrorType.CONTEXT_TOO_LARGE: 422,
         ErrorType.SERVICE_UNAVAILABLE: 503,
         ErrorType.OVERLOADED: 503,
         ErrorType.STAGE_TIMEOUT: 504,
@@ -86,7 +84,7 @@ class AuthenticationError(XatRagError):
 
 
 class NotFoundError(XatRagError):
-    """An unknown RAG, document, job or prompt."""
+    """An unknown RAG, document, job."""
 
     error_type = ErrorType.NOT_FOUND
 
@@ -95,12 +93,6 @@ class IndexMismatchError(XatRagError):
     """The index manifest does not match the loaded models, chunkers or recipe."""
 
     error_type = ErrorType.INDEX_MISMATCH
-
-
-class ContextTooLargeError(XatRagError):
-    """The pinned items and the input are larger than the window."""
-
-    error_type = ErrorType.CONTEXT_TOO_LARGE
 
 
 class ServiceUnavailableError(XatRagError):

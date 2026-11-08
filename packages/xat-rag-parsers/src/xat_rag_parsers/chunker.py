@@ -19,7 +19,7 @@ SPLITTER_VERSION = importlib.metadata.version("langchain-text-splitters")
 
 @dataclass(frozen=True, slots=True)
 class ChunkLimits:
-    """The size limits of a chunk: generator tokens (`max_chunk_tokens`) and embedder tokens."""
+    """The size limits of a chunk: size-ruler tokens (`max_chunk_tokens`) and embedder tokens."""
 
     max_chunk_tokens: int
     max_embed_tokens: int = 510
@@ -56,16 +56,16 @@ def _unit_at(section: Section, offset: int) -> int:
 class StructuralChunker:
     """Turns the sections of a parsed document into chunks with stable IDs."""
 
-    def __init__(self, count_generator: TokenCount, count_embedder: TokenCount, limits: ChunkLimits) -> None:
-        """Make a chunker. `count_generator` counts generator tokens. `count_embedder` counts embedder tokens."""
-        self._count_generator = count_generator
+    def __init__(self, count_size: TokenCount, count_embedder: TokenCount, limits: ChunkLimits) -> None:
+        """Make a chunker. `count_size` is the size ruler. `count_embedder` counts embedder tokens."""
+        self._count_size = count_size
         self._count_embedder = count_embedder
         self._limits = limits
 
     def _fits(self, header: str, text: str) -> bool:
         full = f"{header}\n{text}"
         return (
-            self._count_generator(full) <= self._limits.max_chunk_tokens
+            self._count_size(full) <= self._limits.max_chunk_tokens
             and self._count_embedder(full) <= self._limits.max_embed_tokens
         )
 
@@ -147,19 +147,19 @@ class StructuralChunker:
             uri=source.uri,
             title=source.title,
             parent_id=parent_id,
-            token_count=self._count_generator(f"{section.header}\n{text}"),
+            token_count=self._count_size(f"{section.header}\n{text}"),
             metadata=metadata,
         )
 
     def _split(self, section: Section) -> list[tuple[int, str]]:
         """Split a section. Each piece fits both limits, measured with its header."""
-        generator_room = self._limits.max_chunk_tokens - self._count_generator(section.header) - 1
+        size_room = self._limits.max_chunk_tokens - self._count_size(section.header) - 1
         embedder_room = self._limits.max_embed_tokens - self._count_embedder(section.header) - 1
-        if generator_room < 1 or embedder_room < 1:
+        if size_room < 1 or embedder_room < 1:
             raise ParseError(ParseReason.LIMIT_EXCEEDED, "A section header alone is larger than the chunk limits.")
 
         def length(text: str) -> int:
-            share = max(self._count_generator(text) / generator_room, self._count_embedder(text) / embedder_room)
+            share = max(self._count_size(text) / size_room, self._count_embedder(text) / embedder_room)
             return math.ceil(share * 1000)
 
         splitter = RecursiveCharacterTextSplitter(

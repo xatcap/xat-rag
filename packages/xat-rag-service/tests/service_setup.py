@@ -1,4 +1,4 @@
-"""A small setup of recipes and prompts for the service tests."""
+"""A small setup of recipes for the service tests."""
 
 from pathlib import Path
 
@@ -20,9 +20,6 @@ kind = "{kind}"
 CONTEXT = """
 [context]
 name = "ask"
-generator = "ministral-3-3b"
-query_builder = "text-v1"
-pinned = ["prompt:helper@1"]
 
 [[context.sources]]
 rag = "docs"
@@ -30,20 +27,17 @@ rag = "docs"
 
 
 def write_setup(folder: Path) -> dict[str, str]:
-    """Write recipes and prompts, and return the service environment."""
+    """Write recipes and return the service environment."""
     (folder / "recipes" / "rags").mkdir(parents=True)
     (folder / "recipes" / "contexts").mkdir(parents=True)
     (folder / "recipes" / "rags" / "docs.toml").write_text(RAG.format(name="docs", kind="markdown"))
     (folder / "recipes" / "rags" / "manuals.toml").write_text(RAG.format(name="manuals", kind="pdf"))
     (folder / "recipes" / "contexts" / "ask.toml").write_text(CONTEXT)
-    (folder / "prompts").mkdir()
-    (folder / "prompts" / "helper@1.md").write_text("You answer questions about the handbook.")
     return {
         "XatRag__DataFolder": str(folder / "data"),
         "XatRag__RecipesFolder": str(folder / "recipes"),
         "XatRag__ModelsFolder": str(MODELS),
         "XatRag__LockFile": str(LOCK),
-        "XatRag__PromptsFolder": str(folder / "prompts"),
         "XatRag__AccessKey": KEY,
         "XatRag__Threads": "1",
     }

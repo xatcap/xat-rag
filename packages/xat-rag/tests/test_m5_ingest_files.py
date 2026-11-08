@@ -14,7 +14,7 @@ from pypdf import PdfReader, PdfWriter
 from xat_rag import ContextRequest, Settings, XatRag
 from xat_rag_core.errors import ConfigError, IndexMismatchError, InvalidRequestError, NotFoundError
 from xat_rag_core.model import PageSpan, RawDocument, SourceKind
-from xat_rag_core.query import TextQueryBuilder
+from xat_rag_core.query import build_query
 
 ROOT = Path(__file__).resolve().parents[3]
 MODELS = ROOT / "models"
@@ -51,7 +51,6 @@ max_chunk_tokens = 200
 CONTEXT = """
 [context]
 name = "ask-files"
-generator = "ministral-3-3b"
 
 [[context.sources]]
 rag = "files"
@@ -170,7 +169,7 @@ def raw(doc_id: str, kind: SourceKind, data: bytes, rag: str = "files", uri: str
 def stored_text(library: XatRag, rag: str, *questions: str) -> str:
     texts: list[str] = []
     for question in questions:
-        found = library.search(rag, TextQueryBuilder().build(question))
+        found = library.search(rag, build_query(question))
         texts.extend(candidate.chunk.header + "\n" + candidate.chunk.text for candidate in found.candidates)
     return "\n".join(texts)
 
@@ -178,23 +177,38 @@ def stored_text(library: XatRag, rag: str, *questions: str) -> str:
 # PDF.
 
 
-def test_pdf_pages_are_indexed_and_cited_with_a_page_anchor(rag: XatRag) -> None:
-    result = rag.ingest_one(
-        raw("files:manual.pdf", SourceKind.PDF, make_pdf([PAGE_ONE, "", PAGE_THREE]), uri="https://wiki/manual.pdf")
+def test_pdf_pages_are_indexed_and_returned_with_a_page_anchor(rag: XatRag) -> None:
+    document = RawDocument(
+        "files:manual.pdf",
+        "files",
+        SourceKind.PDF,
+        make_pdf([PAGE_ONE, "", PAGE_THREE]),
+        uri="https://wiki/manual.pdf",
+        title="Manual",
+        version="rev-4",
     )
+    result = rag.ingest_one(document)
     assert result.status == "created"
     assert (result.pages_total, result.pages_indexed) == (3, 2)
     assert [(page.page, page.reason) for page in result.skipped_pages] == [(2, "no_text")]
     assert result.chunks >= 2
-    pack = rag.compose(ContextRequest("ask-files", question="Which port does the orders service use?"))
-    top = pack.chunks[0]
-    assert (top.kind, top.doc_id) == ("pdf", "files:manual.pdf")
-    assert top.uri == "https://wiki/manual.pdf#page=1"
-    assert isinstance(top.span, PageSpan)
-    assert (top.span.page_start, top.span.page_end) == (1, 1)
-    assert rag.chunk_uris([top.chunk_id]) == {top.chunk_id: "https://wiki/manual.pdf#page=1"}
-    cafeteria = [c for c in pack.chunks if "Cafeteria" in c.text]
-    assert all(c.uri.endswith("#page=3") for c in cafeteria)
+    chunks = rag.retrieve(ContextRequest("ask-files", question="Which port does the orders service use?")).chunks
+    top = chunks[0]
+    assert (top.kind, top.source.doc_id, top.source.rag, top.source.source_kind) == (
+        "page",
+        "files:manual.pdf",
+        "files",
+        "pdf",
+    )
+    assert top.source.uri == "https://wiki/manual.pdf#page=1"
+    assert top.source.title == "Manual"
+    assert top.source.version == "rev-4"
+    assert isinstance(top.source.span, PageSpan)
+    assert (top.source.span.page_start, top.source.span.page_end) == (1, 1)
+    cafeteria = [c for c in chunks if "Cafeteria" in c.text]
+    assert cafeteria
+    assert all(c.source.uri == "https://wiki/manual.pdf#page=3" for c in cafeteria)
+    assert all(isinstance(c.source.span, PageSpan) and c.source.span.page_start == 3 for c in cafeteria)
 
 
 def test_pdf_failures_are_results_and_hold_no_document_text(rag: XatRag) -> None:
@@ -302,12 +316,6 @@ def test_a_batch_with_a_bad_kind_stops_at_the_bad_document(rag: XatRag) -> None:
     rag.delete("docs", "docs:before.md")
 
 
-def test_unknown_generator_in_count_tokens(rag: XatRag) -> None:
-    assert rag.count_tokens("Hello world.", "ministral-3-3b") == 3
-    with pytest.raises(InvalidRequestError, match="no profile"):
-        rag.count_tokens("x", "gpt-x")
-
-
 # Text documents.
 
 
@@ -354,19 +362,15 @@ def test_an_update_embeds_only_the_changed_chunks_and_removes_old_chunks(rag: Xa
     assert not store.chunk_exists("docs:g.md#h/guide/gamma")
 
 
-def test_a_citation_to_a_deleted_chunk_is_reported(rag: XatRag) -> None:
+def test_a_deleted_document_is_not_returned(rag: XatRag) -> None:
     rag.ingest_one(raw("docs:cite.md", SourceKind.MARKDOWN, b"# Cite\n\nThe unique zebra protocol note.\n", rag="docs"))
-    pack = rag.compose(ContextRequest("ask-files", question="unique zebra protocol note"))
-    chunks = {chunk.label: chunk.chunk_id for chunk in pack.chunks}
-    label = next(chunk.label for chunk in pack.chunks if chunk.doc_id == "docs:cite.md")
-    answer = json.dumps({"answer": "x", "citations": [label]})
-    assert rag.check_citations(answer, chunks).valid
+    question = "unique zebra protocol note"
+    before = rag.retrieve(ContextRequest("ask-files", question=question, chunks=100))
+    assert "docs:cite.md" in {chunk.source.doc_id for chunk in before.chunks}
     rag.delete("docs", "docs:cite.md")
-    check = rag.check_citations(answer, chunks)
-    assert not check.valid
-    assert check.problem is not None
-    assert check.problem.value == "missing_chunk"
-    assert chunks[label] in check.missing_chunks
+    after = rag.retrieve(ContextRequest("ask-files", question=question, chunks=100))
+    assert "docs:cite.md" not in {chunk.source.doc_id for chunk in after.chunks}
+    assert not any(item.chunk_id.startswith("docs:cite.md#") for item in after.omitted)
 
 
 def test_concurrent_ingestion_keeps_every_document(rag: XatRag) -> None:
@@ -440,15 +444,15 @@ def test_a_mismatched_rag_blocks_its_routes_and_nothing_else(tmp_path: Path) -> 
         with pytest.raises(IndexMismatchError):
             library.ingest_one(raw("docs:x.md", SourceKind.MARKDOWN, b"# T\n\nbody", rag="docs"))
         with pytest.raises(IndexMismatchError):
-            library.compose(ContextRequest("ask-files", question="anything"))
+            library.retrieve(ContextRequest("ask-files", question="anything"))
         with pytest.raises(IndexMismatchError):
             library.delete("docs", "x")
         with pytest.raises(IndexMismatchError):
-            library.search("docs", TextQueryBuilder().build("x"))
+            library.search("docs", build_query("x"))
         assert library.index("files").store.counts() == (0, 0)
         library.rebuild("docs")
         assert library.needs_rebuild() == {}
-        assert library.compose(ContextRequest("ask-files", question="anything")).chunks == ()
+        assert library.retrieve(ContextRequest("ask-files", question="anything")).chunks == ()
     finally:
         library.close()
 
@@ -479,22 +483,6 @@ def open_with_context(tmp_path: Path, name: str, text: str, *, extra_rag: str | 
     XatRag.open(settings).close()
 
 
-def test_a_context_window_above_the_generator_window_stops_the_start(tmp_path: Path) -> None:
-    text = CONTEXT.replace("ask-files", "big").replace(
-        'generator = "ministral-3-3b"', 'generator = "ministral-3-3b"\nwindow = 9000'
-    )
-    with pytest.raises(ConfigError, match="window of the context 'big' is larger than its generator allows"):
-        open_with_context(tmp_path, "big", text)
-
-
-def test_a_context_that_pins_a_missing_prompt_stops_the_start(tmp_path: Path) -> None:
-    text = CONTEXT.replace("ask-files", "pinned").replace(
-        'generator = "ministral-3-3b"', 'generator = "ministral-3-3b"\npinned = ["prompt:ghost@1"]'
-    )
-    with pytest.raises(ConfigError, match="context 'pinned' pins a prompt that is not installed"):
-        open_with_context(tmp_path, "pinned", text)
-
-
 def test_a_context_that_names_a_rag_twice_stops_the_start(tmp_path: Path) -> None:
     text = CONTEXT.replace("ask-files", "twice") + '\n[[context.sources]]\nrag = "files"\n'
     with pytest.raises(ConfigError, match="context 'twice' names a RAG twice"):
@@ -505,3 +493,18 @@ def test_a_rag_with_two_sources_of_the_same_kind_stops_the_start(tmp_path: Path)
     twice = DOCS_RAG + '\n[sources.other]\nkind = "markdown"\n'
     with pytest.raises(ConfigError, match="RAG 'docs' has two sources of the same kind"):
         open_with_context(tmp_path, "ask-files", CONTEXT, extra_rag=twice)
+
+
+def test_a_context_without_a_reranker_and_with_different_rrf_k_stops_the_start(tmp_path: Path) -> None:
+    settings = settings_for(tmp_path)
+    for name, k in (("files", 60), ("docs", 20)):
+        recipe = (FILES_RAG if name == "files" else DOCS_RAG).replace("ms-marco-minilm-l6-v2", "none")
+        (tmp_path / "recipes" / "rags" / f"{name}.toml").write_text(recipe + f"\n[retrieval]\nrrf_k = {k}\n")
+    with pytest.raises(ConfigError, match="context 'ask-files' have no reranker, so they need one rrf_k"):
+        XatRag.open(settings)
+
+
+def test_a_context_recipe_with_a_removed_field_stops_the_start_and_names_the_field(tmp_path: Path) -> None:
+    text = CONTEXT.replace("ask-files", "old").replace('name = "old"\n', 'name = "old"\nwindow = 8192\n')
+    with pytest.raises(ConfigError, match=r"context\.window"):
+        open_with_context(tmp_path, "old", text)

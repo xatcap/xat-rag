@@ -9,6 +9,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 from xat_rag_core.errors import ConfigError
+from xat_rag_core.ranking import MAX_CHUNKS
 
 _NAME = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
 SourceKindName = Literal["markdown", "text", "diff", "jira", "prompt", "pdf", "docx", "html"]
@@ -31,8 +32,6 @@ class RagSection(_Strict):
     format: Literal[1] = 1
     embedder: str
     reranker: str = "none"
-    generator: str = "ministral-3-3b"
-    """The generator whose tokenizer counts `max_chunk_tokens`."""
 
     _name = field_validator("name")(_check_name)
 
@@ -50,7 +49,6 @@ class RetrievalRecipe(_Strict):
 
     lexical_k: int = Field(default=40, ge=1, le=1000)
     dense_k: int = Field(default=40, ge=1, le=1000)
-    exact_k: int = Field(default=20, ge=1, le=1000)
     fusion: Literal["rrf"] = "rrf"
     rrf_k: int = Field(default=60, ge=1, le=1000)
     rerank_candidates: int = Field(default=40, ge=1, le=500)
@@ -82,11 +80,9 @@ class RagRecipe(_Strict):
 
 
 class ContextSource(_Strict):
-    """One RAG of a context, with its quota."""
+    """One RAG of a context."""
 
     rag: str
-    min_tokens: int = Field(default=0, ge=0)
-    max_share: float = Field(default=1.0, gt=0.0, le=1.0)
 
 
 class ContextSection(_Strict):
@@ -94,21 +90,15 @@ class ContextSection(_Strict):
 
     name: str
     format: Literal[1] = 1
-    generator: str
-    window: int = Field(default=8192, ge=256)
-    reserved_output: int = Field(default=768, ge=1)
-    input_max_tokens: int = Field(default=1200, ge=16)
-    pinned: list[str] = Field(default_factory=list[str])
-    order: Literal["edges"] = "edges"
-    citation: Literal["json-gbnf"] = "json-gbnf"
-    query_builder: Literal["log-v1", "text-v1"] = "text-v1"
+    chunks: int = Field(default=10, ge=1, le=MAX_CHUNKS)
+    """How many chunks a request returns when it does not say."""
     sources: list[ContextSource]
 
     _name = field_validator("name")(_check_name)
 
 
 class Limits(_Strict):
-    """Stage time limits of a context request, in milliseconds."""
+    """Stage time limits of a context request, in milliseconds. `pack` limits the merge of the RAGs."""
 
     query_build: int = Field(default=200, ge=1)
     retrieve: int = Field(default=500, ge=1)
@@ -118,7 +108,7 @@ class Limits(_Strict):
 
 
 class ContextRecipe(_Strict):
-    """A context recipe: RAGs, a budget and a query builder."""
+    """A context recipe: a named group of RAGs."""
 
     context: ContextSection
     limits: Limits = Limits()
@@ -153,5 +143,9 @@ def load_recipes(folder: Path) -> tuple[dict[str, RagRecipe], dict[str, ContextR
         rerankers = {rags[source.rag].rag.reranker for source in recipe.context.sources}
         if len(rerankers) > 1:
             raise ConfigError(f"All RAGs of the context '{recipe.context.name}' must use the same reranker.")
+        if rerankers == {"none"} and len({rags[source.rag].retrieval.rrf_k for source in recipe.context.sources}) > 1:
+            raise ConfigError(
+                f"The RAGs of the context '{recipe.context.name}' have no reranker, so they need one rrf_k."
+            )
         contexts[recipe.context.name] = recipe
     return rags, contexts

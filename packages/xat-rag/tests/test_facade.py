@@ -26,35 +26,22 @@ keep = 4
 
 CONTEXT = """
 [context]
-name = "log-triage"
-generator = "ministral-3-3b"
-window = 8192
-reserved_output = 768
-input_max_tokens = 1200
-pinned = ["prompt:log-triage-system@3"]
-query_builder = "log-v1"
+name = "triage"
+chunks = 6
 
 [[context.sources]]
 rag = "docs"
-min_tokens = 200
-max_share = 0.5
 
 [[context.sources]]
 rag = "jira"
-min_tokens = 200
-max_share = 0.5
 
 [[context.sources]]
 rag = "diffs"
-min_tokens = 200
-max_share = 0.5
 """
 
 ASK = """
 [context]
 name = "ask"
-generator = "ministral-3-3b"
-query_builder = "text-v1"
 
 [[context.sources]]
 rag = "docs"
@@ -91,11 +78,7 @@ DIFF = b"""--- a/src/OrderService.java
      }
 """
 
-LOGS = (
-    "2026-11-07T10:00:01.123Z INFO  [http] GET /api/orders/42 200 in 12 ms",
-    "2026-11-07T10:00:03.001Z ERROR [orders] com.shop.OrderNotFoundException: order X-9f1c not found",
-    "    at com.shop.OrderService.find(OrderService.java:41)",
-)
+QUESTION = "OrderNotFoundException: order X-9f1c not found in OrderService.find"
 
 
 def write_setup(folder: Path, docs_max: int = 350) -> Settings:
@@ -104,16 +87,13 @@ def write_setup(folder: Path, docs_max: int = 350) -> Settings:
     for name, kind, size in (("docs", "markdown", docs_max), ("jira", "jira", 350), ("diffs", "diff", 350)):
         recipe = RAG_RECIPE.format(name=name, kind=kind, max_tokens=size)
         (folder / "recipes" / "rags" / f"{name}.toml").write_text(recipe)
-    (folder / "recipes" / "contexts" / "log-triage.toml").write_text(CONTEXT)
+    (folder / "recipes" / "contexts" / "triage.toml").write_text(CONTEXT)
     (folder / "recipes" / "contexts" / "ask.toml").write_text(ASK)
-    (folder / "prompts").mkdir()
-    (folder / "prompts" / "log-triage-system@3.md").write_text("You help a developer find the cause of log errors.")
     return Settings(
         data_folder=folder / "data",
         recipes_folder=folder / "recipes",
         models_folder=MODELS,
         lock_file=ROOT / "build" / "models.lock.json",
-        prompts_folder=folder / "prompts",
         threads=1,
     )
 
@@ -135,45 +115,29 @@ def setup(tmp_path_factory: pytest.TempPathFactory) -> tuple[XatRag, Path]:
     return rag, folder
 
 
-def test_log_triage_pack(setup: tuple[XatRag, Path]) -> None:
+def test_triage_returns_chunks_of_all_rags_with_sources(setup: tuple[XatRag, Path]) -> None:
     rag, _ = setup
-    pack = rag.compose(ContextRequest("log-triage", log_lines=LOGS, debug=True))
-    assert pack.generator == "ministral-3-3b"
-    assert pack.max_tokens == 768
-    used = pack.budget
-    parts = (used.reserved_output, used.overhead, used.pinned, used.input, used.chunks, used.margin, used.unused)
-    assert sum(parts) == 8192
-    labels = [chunk.label for chunk in pack.chunks]
-    assert labels == [f"C{i}" for i in range(1, len(labels) + 1)]
-    rags = {chunk.rag for chunk in pack.chunks}
-    assert rags == {"docs", "jira", "diffs"}
-    assert pack.chunks[0].chunk_id != "docs:handbook.md#h/handbook/cafeteria"
-    assert any(chunk.chunk_id.startswith("jira:PROJ-123#") for chunk in pack.chunks)
-    system, user = pack.messages
-    assert system.content.startswith("You help a developer")
-    assert user.content.count('trust="untrusted"') == len(pack.chunks) + 1
-    assert user.content.rstrip().endswith("</input>")
-    assert 'label ::= "\\"C1\\""' in pack.grammar
-    assert pack.debug is not None
-    assert all(item.rrf_score is not None for item in pack.debug)
-    real = rag.count_tokens(system.content, "ministral-3-3b") + rag.count_tokens(user.content, "ministral-3-3b")
-    assert real <= 8192 - used.reserved_output - used.margin
-
-
-def test_citations(setup: tuple[XatRag, Path]) -> None:
-    rag, _ = setup
-    pack = rag.compose(ContextRequest("log-triage", log_lines=LOGS))
-    chunks = {chunk.label: chunk.chunk_id for chunk in pack.chunks}
-    assert rag.check_citations(json.dumps({"answer": "x", "citations": ["C1"]}), chunks).valid
-    assert not rag.check_citations(json.dumps({"answer": "x", "citations": ["C99"]}), chunks).valid
+    result = rag.retrieve(ContextRequest("triage", question=QUESTION, debug=True))
+    assert 1 < len(result.chunks) <= 6
+    assert {chunk.source.rag for chunk in result.chunks} == {"docs", "jira", "diffs"}
+    assert result.chunks[0].chunk_id != "docs:handbook.md#h/handbook/cafeteria"
+    assert any(chunk.chunk_id.startswith("jira:PROJ-123#") for chunk in result.chunks)
+    jira = next(chunk for chunk in result.chunks if chunk.source.rag == "jira")
+    assert jira.source.uri == "https://jira/PROJ-123"
+    assert jira.source.doc_id == "jira:PROJ-123"
+    diff = next(chunk for chunk in result.chunks if chunk.source.rag == "diffs")
+    assert diff.metadata["repo"] == "shop"
+    assert result.debug is not None
+    assert all(item.rrf_score is not None for item in result.debug)
 
 
 def test_text_context_and_errors(setup: tuple[XatRag, Path]) -> None:
     rag, _ = setup
-    pack = rag.compose(ContextRequest("ask", question="Which port does the orders service use?"))
-    assert pack.chunks[0].chunk_id == "docs:handbook.md#h/handbook/orders-service"
+    result = rag.retrieve(ContextRequest("ask", question="Which port does the orders service use?"))
+    assert result.chunks[0].chunk_id == "docs:handbook.md#h/handbook/orders-service"
+    assert result.chunks[0].source.uri == "docs/handbook.md"
     with pytest.raises(NotFoundError):
-        rag.compose(ContextRequest("missing", question="x"))
+        rag.retrieve(ContextRequest("missing", question="x"))
 
 
 def test_unchanged_reingest_and_delete(setup: tuple[XatRag, Path]) -> None:

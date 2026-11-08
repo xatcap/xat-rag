@@ -1,7 +1,7 @@
 [project]
 name = "xat-rag"
 version = "0.1.0"
-description = "The xat-rag library: recipes, the composition root, ingestion and context packs for small local models."
+description = "xat-rag: retrieves ranked chunks with their source, for any LLM."
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
@@ -10,7 +10,6 @@ dependencies = [
     "xat-rag-sqlite",
     "xat-rag-parsers",
     "xat-rag-documents",
-    "xat-rag-logs",
     "xat-rag-onnx",
     "xat-rag-tokenizers",
     "pydantic>=2.9,<3",
@@ -21,7 +20,6 @@ xat-rag-core = { workspace = true }
 xat-rag-sqlite = { workspace = true }
 xat-rag-parsers = { workspace = true }
 xat-rag-documents = { workspace = true }
-xat-rag-logs = { workspace = true }
 xat-rag-onnx = { workspace = true }
 xat-rag-tokenizers = { workspace = true }
 

@@ -1,0 +1,7 @@
+{
+  "name": "xat-rag-workflow",
+  "displayName": "xat-rag Workflow",
+  "version": "0.1.0",
+  "description": "Workspace subagents, skills, and deterministic lifecycle hooks for xat-rag."
+}
+

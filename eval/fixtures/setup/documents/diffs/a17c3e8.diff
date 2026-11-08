@@ -1,0 +1,6 @@
+--- a/legacy/com/shop/OrderService.java
++++ b/legacy/com/shop/OrderService.java
+@@ -12,2 +12,3 @@ public void audit(Order order) {
+     store.save(order);
++    logger.info("order audited");
+     }

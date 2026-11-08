@@ -1,0 +1,11 @@
+[context]
+name = "triage"
+
+[[context.sources]]
+rag = "docs"
+
+[[context.sources]]
+rag = "jira"
+
+[[context.sources]]
+rag = "diffs"

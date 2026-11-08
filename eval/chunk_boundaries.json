@@ -9,11 +9,38 @@
   }
  },
  {
+  "chunk_id": "diffs:7d40be2.diff#f/config/payments.yaml/hunk/1",
+  "hash": "99232d491c5a40cc",
+  "span": {
+   "end": 9,
+   "start": 8,
+   "type": "line"
+  }
+ },
+ {
   "chunk_id": "diffs:9b1e2d0.diff#f/config/orders.yaml/hunk/1",
   "hash": "2ae7da985de2831c",
   "span": {
    "end": 4,
    "start": 3,
+   "type": "line"
+  }
+ },
+ {
+  "chunk_id": "diffs:a17c3e8.diff#f/legacy/com/shop/OrderService.java/hunk/1",
+  "hash": "f6d041a7f944e62c",
+  "span": {
+   "end": 14,
+   "start": 12,
+   "type": "line"
+  }
+ },
+ {
+  "chunk_id": "diffs:c21f9aa.diff#f/src/main/java/com/shop/RefundRunner.java/hunk/1",
+  "hash": "f73f7513b7974d2f",
+  "span": {
+   "end": 31,
+   "start": 30,
    "type": "line"
   }
  },
@@ -72,6 +99,24 @@
   }
  },
  {
+  "chunk_id": "docs:shipping.md#h/shipping-service/database-timeouts",
+  "hash": "6fbddacc3c656397",
+  "span": {
+   "end": 5,
+   "start": 5,
+   "type": "line"
+  }
+ },
+ {
+  "chunk_id": "docs:shipping.md#h/shipping-service/label-printing",
+  "hash": "5f37862a587911a9",
+  "span": {
+   "end": 9,
+   "start": 9,
+   "type": "line"
+  }
+ },
+ {
   "chunk_id": "jira:PAY-7.json#desc",
   "hash": "0a8981abcda03f9f",
   "span": {
@@ -99,6 +144,15 @@
   }
  },
  {
+  "chunk_id": "jira:PROJ-1230.json#desc",
+  "hash": "a3ede4597c24ce69",
+  "span": {
+   "end": 3,
+   "start": 1,
+   "type": "line"
+  }
+ },
+ {
   "chunk_id": "jira:PROJ-200.json#desc",
   "hash": "8e818fd7bc0bb5ad",
   "span": {
@@ -112,6 +166,15 @@
   "hash": "42b062909a63c81c",
   "span": {
    "end": 1,
+   "start": 1,
+   "type": "line"
+  }
+ },
+ {
+  "chunk_id": "jira:PROJ-301.json#desc",
+  "hash": "d938587cd8e6c405",
+  "span": {
+   "end": 3,
    "start": 1,
    "type": "line"
   }

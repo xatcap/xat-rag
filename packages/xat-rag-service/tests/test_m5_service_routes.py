@@ -1,7 +1,6 @@
 """Milestone 5 tests of the service routes with the real models: uploads, jobs, limits, errors and health."""
 
 import io
-import itertools
 import json
 import threading
 import time
@@ -16,7 +15,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pypdf import PdfReader, PdfWriter
 from service_setup import KEY, LOCK, MODELS, multipart, write_setup
-from xat_rag import Settings, XatRag
+from xat_rag import ContextRequest, RetrievalResult, Settings, XatRag
 from xat_rag.types import DocumentResult
 from xat_rag_core.model import RawDocument
 from xat_rag_service.app import MAX_UPLOAD_BYTES, create_app
@@ -47,47 +46,6 @@ kind = "html"
 [sources.md]
 kind = "markdown"
 """
-
-LOGS_CONTEXT = """
-[context]
-name = "logs"
-generator = "ministral-3-3b"
-query_builder = "log-v1"
-pinned = ["prompt:helper@1"]
-
-[[context.sources]]
-rag = "docs"
-"""
-
-TINY_CONTEXT = """
-[context]
-name = "tiny"
-generator = "ministral-3-3b"
-window = 256
-reserved_output = 200
-input_max_tokens = 100
-
-[[context.sources]]
-rag = "docs"
-"""
-
-WORDS = [
-    "order",
-    "queue",
-    "cache",
-    "index",
-    "table",
-    "record",
-    "batch",
-    "retry",
-    "timeout",
-    "socket",
-    "thread",
-    "buffer",
-    "stream",
-    "request",
-    "response",
-]
 
 
 def make_pdf(pages: list[str], password: str | None = None) -> bytes:
@@ -145,6 +103,15 @@ def make_docx(*, macro: bool = False) -> bytes:
     return out.getvalue()
 
 
+MIXED_CONTEXT = """
+[context]
+name = "mixed"
+chunks = 20
+
+[[context.sources]]
+rag = "mixed"
+"""
+
 HTML = b"<html><body><h1>Gateway</h1><p>Set HTTPS_PROXY before you restart the gateway.</p></body></html>"
 
 
@@ -152,14 +119,12 @@ def prepare(folder: Path) -> Settings:
     env = write_setup(folder)
     recipes = folder / "recipes"
     (recipes / "rags" / "mixed.toml").write_text(MIXED_RAG)
-    (recipes / "contexts" / "logs.toml").write_text(LOGS_CONTEXT)
-    (recipes / "contexts" / "tiny.toml").write_text(TINY_CONTEXT)
+    (recipes / "contexts" / "mixed.toml").write_text(MIXED_CONTEXT)
     return Settings(
         data_folder=Path(env["XatRag__DataFolder"]),
         recipes_folder=recipes,
         models_folder=MODELS,
         lock_file=LOCK,
-        prompts_folder=Path(env["XatRag__PromptsFolder"]),
         threads=1,
     )
 
@@ -223,7 +188,15 @@ def client(make_client: Callable[..., TestClient], rag: XatRag) -> TestClient:
 
 def test_pdf_docx_html_and_markdown_in_one_upload(client: TestClient) -> None:
     fields = [
-        {"doc_id": "mixed:manual.pdf", "kind": "pdf", "part": "p", "uri": "https://wiki/manual.pdf"},
+        {
+            "doc_id": "mixed:manual.pdf",
+            "kind": "pdf",
+            "part": "p",
+            "uri": "https://wiki/manual.pdf",
+            "title": "Manual",
+            "version": "rev-4",
+            "metadata": {"team": "ops", "level": 2},
+        },
         {"doc_id": "mixed:spec.docx", "kind": "docx", "part": "d"},
         {"doc_id": "mixed:guide.html", "kind": "html", "part": "h"},
         {"doc_id": "mixed:note.md", "kind": "markdown", "part": "m"},
@@ -240,12 +213,25 @@ def test_pdf_docx_html_and_markdown_in_one_upload(client: TestClient) -> None:
     assert job["results"][0]["skipped_pages"] == [{"page": 2, "label": "2", "reason": "no_text"}]
     hits = client.post("/v1/rags/mixed/search", json={"question": "shipping depot opens"}, headers=AUTH).json()["hits"]
     assert hits[0]["chunk_id"].startswith("mixed:manual.pdf#")
-    assert hits[0]["span"]["type"] == "page"
-    assert hits[0]["uri"] == "https://wiki/manual.pdf"
-    spans = {hit["chunk_id"].split("#")[0]: hit["span"]["type"] for hit in hits}
-    assert set(spans.values()) <= {"page", "block", "line"}
+    source = hits[0]["source"]
+    assert source["span"]["type"] == "page"
+    assert source["uri"] == f"https://wiki/manual.pdf#page={source['span']['page_start']}"
+    assert (source["rag"], source["doc_id"], source["source_kind"]) == ("mixed", "mixed:manual.pdf", "pdf")
+    assert (source["title"], source["version"]) == ("Manual", "rev-4")
+    assert hits[0]["metadata"] == {"team": "ops", "level": 2}
+    spans = {hit["chunk_id"].split("#")[0]: hit["source"]["span"]["type"] for hit in hits}
+    assert spans["mixed:manual.pdf"] == "page"
+    assert spans["mixed:spec.docx"] == "block"
+    assert spans["mixed:guide.html"] == "line"
+    assert spans["mixed:note.md"] == "line"
     billing = client.post("/v1/rags/mixed/search", json={"question": "billing TLS port 9443"}, headers=AUTH).json()
     assert billing["hits"][0]["chunk_id"].startswith("mixed:spec.docx#")
+    context = client.post("/v1/context", json={"context": "mixed", "question": "shipping depot opens"}, headers=AUTH)
+    assert context.status_code == 200, context.text
+    top = context.json()["chunks"][0]
+    assert top["chunk_id"].startswith("mixed:manual.pdf#")
+    assert top["source"]["uri"].startswith("https://wiki/manual.pdf#page=")
+    assert top["source"]["version"] == "rev-4"
     for doc_id in ("mixed:manual.pdf", "mixed:spec.docx", "mixed:guide.html", "mixed:note.md"):
         assert client.delete(f"/v1/rags/mixed/documents/{doc_id}", headers=AUTH).json() == {"deleted": True}
 
@@ -385,13 +371,7 @@ def test_the_access_key_is_checked_before_the_size(client: TestClient) -> None:
 
 def test_a_json_body_over_1_mib_is_a_413_on_every_json_route(client: TestClient) -> None:
     big = b" " * (1024 * 1024 + 1)
-    for path in (
-        "/v1/context",
-        "/v1/query/build",
-        "/v1/tokens/count",
-        "/v1/citations/validate",
-        "/v1/rags/docs/search",
-    ):
+    for path in ("/v1/context", "/v1/query/build", "/v1/rags/docs/search"):
         response = client.post(path, content=big, headers={**AUTH, "Content-Type": "application/json"})
         assert response.status_code == 413, path
 
@@ -470,26 +450,32 @@ def test_unknown_jobs_are_404(client: TestClient) -> None:
 # Overload.
 
 
+def slow_retrieve(started: threading.Event | None, release: threading.Event) -> Callable[[ContextRequest], Any]:
+    def slow(request: ContextRequest) -> RetrievalResult:
+        if started is not None:
+            started.set()
+        assert release.wait(10)
+        return RetrievalResult(())
+
+    return slow
+
+
+def ask(client: TestClient, question: str = "a") -> Any:
+    return client.post("/v1/context", json={"context": "ask", "question": question}, headers=AUTH)
+
+
 def test_overloaded_with_a_queue_limit_of_one(
     make_client: Callable[..., TestClient], rag: XatRag, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     started, release = threading.Event(), threading.Event()
-
-    def slow_count(text: str, generator: str) -> int:
-        started.set()
-        assert release.wait(10)
-        return 1
-
-    monkeypatch.setattr(rag, "count_tokens", slow_count)
+    monkeypatch.setattr(rag, "retrieve", slow_retrieve(started, release))
     client = make_client(queue_limit=1)
     first: list[Any] = []
-    worker = threading.Thread(
-        target=lambda: first.append(client.post("/v1/tokens/count", json={"text": "a"}, headers=AUTH))
-    )
+    worker = threading.Thread(target=lambda: first.append(ask(client, "a")))
     worker.start()
     try:
         assert started.wait(10)
-        second = client.post("/v1/tokens/count", json={"text": "b"}, headers=AUTH)
+        second = ask(client, "b")
         assert second.status_code == 503
         assert second.json()["error"]["type"] == "overloaded_error"
         assert second.headers["Retry-After"] == "1"
@@ -499,25 +485,20 @@ def test_overloaded_with_a_queue_limit_of_one(
         release.set()
         worker.join(10)
     assert first[0].status_code == 200
-    assert client.post("/v1/tokens/count", json={"text": "c"}, headers=AUTH).status_code == 200
+    assert ask(client, "c").status_code == 200
 
 
 def test_concurrent_requests_over_the_queue_limit_are_refused_and_the_rest_complete(
     make_client: Callable[..., TestClient], rag: XatRag, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     release = threading.Event()
-
-    def slow_count(text: str, generator: str) -> int:
-        assert release.wait(10)
-        return 1
-
-    monkeypatch.setattr(rag, "count_tokens", slow_count)
+    monkeypatch.setattr(rag, "retrieve", slow_retrieve(None, release))
     client = make_client(queue_limit=2)
     responses: list[Any] = []
     lock = threading.Lock()
 
     def call() -> None:
-        response = client.post("/v1/tokens/count", json={"text": "a"}, headers=AUTH)
+        response = ask(client)
         with lock:
             responses.append(response)
 
@@ -618,82 +599,188 @@ def test_a_degraded_service_refuses_new_uploads_without_a_retry_hint_and_still_r
     assert response.json()["error"]["type"] == "service_unavailable_error"
     assert "Retry-After" not in response.headers
     assert client.get("/v1/rags", headers=AUTH).status_code == 200
-    assert client.post("/v1/tokens/count", json={"text": "a"}, headers=AUTH).status_code == 200
+    assert ask(client).status_code == 200
 
 
 # Context route.
 
 
-def test_context_budget_in_the_json_adds_up_and_overrides_work(client: TestClient) -> None:
-    response = client.post(
-        "/v1/context", json={"context": "ask", "question": "Which port?", "debug": True}, headers=AUTH
-    )
-    data = response.json()
-    budget = data["budget"]
-    parts = ("reserved_output", "overhead", "pinned", "input", "chunks", "margin", "unused")
-    assert sum(budget[name] for name in parts) == budget["window"] == 8192
-    assert data["debug"]
-    smaller = client.post(
-        "/v1/context", json={"context": "ask", "question": "Which port?", "reserved_output": 100}, headers=AUTH
-    ).json()
-    assert smaller["max_tokens"] == 100
-    assert smaller["debug"] is None
+CHUNK_KEYS = {
+    "chunk_id", "parent_id", "kind", "score", "size_tokens", "header", "text", "source", "metadata"
+}  # fmt: skip
+SOURCE_KEYS = {"rag", "doc_id", "source_kind", "uri", "title", "version", "span"}
 
 
-@pytest.mark.parametrize("field", ["reserved_output", "input_max_tokens"])
-def test_context_overrides_above_the_recipe_are_a_400(client: TestClient, field: str) -> None:
-    for value in (10**6, 0, -1):
-        response = client.post("/v1/context", json={"context": "ask", "question": "q", field: value}, headers=AUTH)
-        assert response.status_code == 400, (field, value)
-        assert response.json()["error"]["type"] == "invalid_request_error"
-        assert f"'{field}'" in response.json()["error"]["message"]
-
-
-def test_a_tiny_window_is_a_422(client: TestClient) -> None:
-    response = client.post("/v1/context", json={"context": "tiny", "question": "Which port?"}, headers=AUTH)
-    assert response.status_code == 422
-    assert response.json()["error"]["type"] == "context_too_large_error"
-    assert "Which port" not in response.text
-
-
-def test_many_log_lines_report_dropped_templates(client: TestClient) -> None:
-    triples = itertools.islice(itertools.product(WORDS, WORDS, WORDS), 400)
-    lines = [f"INFO worker {a} {b} finished {c} ok" for a, b, c in triples]
-    lines.append("ERROR [orders] OrderNotFoundException: order X not found")
-    response = client.post(
-        "/v1/context", json={"context": "logs", "log_lines": lines, "input_max_tokens": 200}, headers=AUTH
-    )
+def test_the_context_response_has_chunks_omitted_and_debug_only(client: TestClient) -> None:
+    response = client.post("/v1/context", json={"context": "ask", "question": "Which port?"}, headers=AUTH)
     assert response.status_code == 200, response.text
     data = response.json()
-    assert data["input"]["dropped_templates"] > 0
-    assert data["input"]["tokens"] <= 200
-    assert "OrderNotFoundException" in data["input"]["text"]
-    assert data["rendered"]["messages"][0]["content"].startswith("You answer")
+    assert set(data) == {"chunks", "omitted", "debug"}
+    assert data["debug"] is None
+    assert isinstance(data["omitted"], list)
+    chunk = data["chunks"][0]
+    assert set(chunk) == CHUNK_KEYS
+    assert set(chunk["source"]) == SOURCE_KEYS
+    assert chunk["chunk_id"] == "docs:handbook.md#h/handbook/orders"
+    assert chunk["source"]["rag"] == "docs"
+    assert chunk["source"]["doc_id"] == "docs:handbook.md"
+    assert chunk["source"]["source_kind"] == "markdown"
+    assert chunk["source"]["span"]["type"] == "line"
+    assert chunk["source"]["version"] == ""
+    assert isinstance(chunk["metadata"], dict)
+    assert chunk["size_tokens"] > 0
+    assert isinstance(chunk["score"], float)
+    for removed in ("budget", "rendered", "input", "citation", "pack_id", "messages", "max_tokens", "generator"):
+        assert removed not in data
+    for removed in ("label", "tags", "tokens", "uri", "span", "rag", "doc_id"):
+        assert removed not in chunk
+
+
+def test_the_chunks_are_sorted_by_score(client: TestClient) -> None:
+    data = client.post("/v1/context", json={"context": "ask", "question": "Which port?"}, headers=AUTH).json()
+    scores = [chunk["score"] for chunk in data["chunks"]]
+    assert scores == sorted(scores, reverse=True)
+
+
+def test_debug_is_a_list_of_scores_when_asked(client: TestClient) -> None:
+    body = {"context": "ask", "question": "Which port?", "debug": True}
+    data = client.post("/v1/context", json=body, headers=AUTH).json()
+    assert data["debug"]
+    assert set(data["debug"][0]) == {
+        "chunk_id", "rag", "lexical_rank", "dense_rank", "rrf_score", "rerank_score", "rerank_truncated"
+    }  # fmt: skip
+    assert {item["chunk_id"] for item in data["debug"]} >= {chunk["chunk_id"] for chunk in data["chunks"]}
+
+
+def test_the_number_of_chunks_can_be_set_in_the_request(client: TestClient) -> None:
+    docs = {"context": "ask", "question": "Which port?"}
+    assert len(client.post("/v1/context", json=docs, headers=AUTH).json()["chunks"]) >= 1
+    one = client.post("/v1/context", json={**docs, "chunks": 1}, headers=AUTH).json()
+    assert len(one["chunks"]) == 1
+    assert one["chunks"][0]["chunk_id"] == "docs:handbook.md#h/handbook/orders"
+    limited = [item for item in one["omitted"] if item["reason"] == "limit"]
+    assert all(set(item) == {"chunk_id", "reason"} for item in one["omitted"])
+    assert all(item["chunk_id"] != one["chunks"][0]["chunk_id"] for item in limited)
+
+
+@pytest.mark.parametrize("chunks", [0, -1, 101, 10**6, "ten", 1.5, None])
+def test_a_number_of_chunks_outside_1_to_100_is_a_400(client: TestClient, chunks: Any) -> None:
+    body = {"context": "ask", "question": "Which port?", "chunks": chunks}
+    response = client.post("/v1/context", json=body, headers=AUTH)
+    if chunks is None:  # No number means the recipe default.
+        assert response.status_code == 200
+        return
+    assert response.status_code == 400, chunks
+    assert response.json()["error"]["type"] == "invalid_request_error"
+    assert "chunks" in response.json()["error"]["message"]
+
+
+@pytest.mark.parametrize("chunks", [1, 100])
+def test_the_limits_of_the_number_of_chunks_are_accepted(client: TestClient, chunks: int) -> None:
+    body = {"context": "ask", "question": "Which port?", "chunks": chunks}
+    assert client.post("/v1/context", json=body, headers=AUTH).status_code == 200
+
+
+@pytest.mark.parametrize("question", ["", " ", "   ", "\n\t", "\u200b", "\u200b\u200b \u2060\ufeff"])
+def test_an_empty_or_zero_width_question_is_a_400(client: TestClient, question: str) -> None:
+    response = client.post("/v1/context", json={"context": "ask", "question": question}, headers=AUTH)
+    assert response.status_code == 400
+    assert response.json()["error"]["type"] == "invalid_request_error"
+    assert "needs a question" in response.json()["error"]["message"]
+
+
+def test_a_question_over_20000_characters_is_a_400_and_at_20000_it_is_accepted(client: TestClient) -> None:
+    long = client.post("/v1/context", json={"context": "ask", "question": "a" * 20001}, headers=AUTH)
+    assert long.status_code == 400
+    assert long.json()["error"]["type"] == "invalid_request_error"
+    assert "question" in long.json()["error"]["message"]
+    assert "aaaa" not in long.text
+    ok = client.post("/v1/context", json={"context": "ask", "question": ("orders " * 3000)[:20000]}, headers=AUTH)
+    assert ok.status_code == 200, ok.text
+
+
+@pytest.mark.parametrize(
+    "removed",
+    [
+        {"log_lines": ["ERROR x"]},
+        {"selected_lines": [1]},
+        {"reserved_output": 100},
+        {"input_max_tokens": 100},
+        {"generator": "ministral-3-3b"},
+        {"builder": "text-v1"},
+        {"prompts": []},
+        {"pinned": []},
+    ],
+)
+def test_a_removed_field_in_the_context_body_is_a_400(client: TestClient, removed: dict[str, Any]) -> None:
+    response = client.post("/v1/context", json={"context": "ask", "question": "q", **removed}, headers=AUTH)
+    assert response.status_code == 400
+    assert response.json()["error"]["type"] == "invalid_request_error"
+    assert "unknown field" in response.json()["error"]["message"]
 
 
 def test_context_body_limits_and_shapes(client: TestClient) -> None:
-    too_many = client.post("/v1/context", json={"context": "logs", "log_lines": ["x"] * 2001}, headers=AUTH)
-    assert too_many.status_code == 400
-    assert "log_lines" in too_many.json()["error"]["message"]
     for body in (
         {"context": "ask"},
-        {"context": "ask", "question": ""},
-        {"context": "ask", "question": "   "},
+        {"question": "q"},
         {"context": "", "question": "q"},
+        {"context": "ask", "question": 5},
         {"context": "ask", "question": "q", "unknown": 1},
-        {"context": "ask", "question": "q", "log_lines": ["a"]},
         {"context": "ask", "question": "q", "debug": "maybe"},
-        {"context": "ask", "question": "q", "selected_lines": ["a"]},
         {"context": "x" * 65, "question": "q"},
+        {"context": "missing", "question": "q"},
     ):
         response = client.post("/v1/context", json=body, headers=AUTH)
         assert response.status_code in {400, 404}, body
         assert response.json()["error"]["type"] in {"invalid_request_error", "not_found_error"}
+    assert client.post("/v1/context", json={"context": "missing", "question": "q"}, headers=AUTH).status_code == 404
 
 
-def test_a_punctuation_heavy_question_is_not_a_500(client: TestClient) -> None:
-    response = client.post("/v1/context", json={"context": "ask", "question": "{}();" * 400}, headers=AUTH)
+@pytest.mark.parametrize("question", ["{}();" * 4000, "\u4e2d" * 20000, "0x" + "deadbeef" * 2000])
+def test_a_long_or_odd_question_is_not_a_500(client: TestClient, question: str) -> None:
+    response = client.post("/v1/context", json={"context": "ask", "question": question}, headers=AUTH)
+    assert response.status_code == 200, response.text
+
+
+def test_the_search_route_hits_have_the_chunk_form_and_the_scores_of_each_stage(client: TestClient) -> None:
+    response = client.post("/v1/rags/docs/search", json={"question": "Which port?"}, headers=AUTH)
     assert response.status_code == 200
+    data = response.json()
+    assert set(data) == {"query", "hits"}
+    hit = data["hits"][0]
+    assert set(hit) == CHUNK_KEYS | {"lexical_rank", "dense_rank", "rrf_score", "rerank_score"}
+    assert set(hit["source"]) == SOURCE_KEYS
+    assert hit["rrf_score"] is not None
+    assert hit["rerank_score"] == hit["score"]
+    assert set(data["query"]) == {"lexical_terms", "dense_text", "rerank_text"}
+
+
+def test_the_search_route_refuses_a_question_over_20000_characters(client: TestClient) -> None:
+    response = client.post("/v1/rags/docs/search", json={"question": "a" * 20001}, headers=AUTH)
+    assert response.status_code == 400
+
+
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("post", "/v1/tokens/count"),
+        ("post", "/v1/citations/validate"),
+        ("get", "/v1/prompts/helper/1"),
+        ("get", "/v1/prompts/helper"),
+        ("get", "/v1/prompts"),
+    ],
+)
+def test_the_removed_routes_are_404(client: TestClient, method: str, path: str) -> None:
+    kwargs: dict[str, Any] = {"json": {"text": "x"}} if method == "post" else {}
+    response = getattr(client, method)(path, headers=AUTH, **kwargs)
+    assert response.status_code == 404
+    assert response.json() == {"error": {"message": "The route does not exist.", "type": "not_found_error"}}
+
+
+def test_the_manifest_of_a_rag_has_the_size_tokenizer(client: TestClient) -> None:
+    manifest = client.get("/v1/rags/docs", headers=AUTH).json()["manifest"]
+    assert manifest["size_tokenizer_id"].startswith("ministral-3-3b-tokenizer@")
+    assert "generator_tokenizer_id" not in manifest
 
 
 # Other routes, auth and the Host guard.
@@ -725,9 +812,6 @@ def test_wrong_method_and_bad_json_use_the_error_body(client: TestClient) -> Non
     bad = client.post("/v1/context", content=b"{bad", headers={**AUTH, "Content-Type": "application/json"})
     assert bad.status_code == 400
     assert "detail" not in bad.json()
-    assert client.get("/v1/prompts/helper/not-a-number", headers=AUTH).status_code == 400
-    assert client.post("/v1/tokens/count", json={"text": "x", "generator": "gpt-x"}, headers=AUTH).status_code == 400
-    assert client.post("/v1/tokens/count", json={"text": ""}, headers=AUTH).json()["tokens"] == 0
 
 
 @pytest.mark.parametrize(
@@ -770,3 +854,9 @@ def test_the_host_header_must_be_a_loopback_name(client: TestClient, host: str, 
 def test_a_browser_origin_is_refused_also_on_the_open_route(client: TestClient) -> None:
     assert client.get("/health/live", headers={"Origin": "http://localhost:3000"}).status_code == 400
     assert client.get("/v1/rags", headers={**AUTH, "Origin": "null"}).status_code == 400
+
+
+@pytest.mark.parametrize("value", [True, "5", 5.0])
+def test_the_number_of_chunks_must_be_a_json_integer(client: TestClient, value: object) -> None:
+    body = {"context": "ask", "question": "Which port?", "chunks": value}
+    assert client.post("/v1/context", json=body, headers=AUTH).status_code == 400

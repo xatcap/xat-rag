@@ -9,7 +9,7 @@ import logging
 import threading
 from collections.abc import Awaitable, Callable
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Literal, cast
+from typing import Any, cast
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -26,12 +26,13 @@ from xat_rag_core.errors import (
     ServiceUnavailableError,
     XatRagError,
 )
-from xat_rag_core.query import RetrievalQuery, TextQueryBuilder
+from xat_rag_core.query import MAX_QUESTION_CHARS, RetrievalQuery
+from xat_rag_core.query import build_query as make_query
+from xat_rag_core.ranking import MAX_CHUNKS
 from xat_rag_core.tracing import untraced
-from xat_rag_logs import LogInput, LogQueryBuilder
 
 from xat_rag_service.jobs import Job, JobManager
-from xat_rag_service.serialize import citation_json, document_result_json, pack_json, query_json, span_json
+from xat_rag_service.serialize import chunk_json, document_result_json, query_json, result_json
 from xat_rag_service.uploads import raw_documents, read_upload
 
 MIB = 1024 * 1024
@@ -51,41 +52,15 @@ class ContextBody(_Body):
     """The body of `POST /v1/context`."""
 
     context: str = Field(min_length=1, max_length=64)
-    question: str = Field(default="", max_length=20_000)
-    log_lines: list[str] = Field(default_factory=list[str], max_length=2000)
-    selected_lines: list[int] = Field(default_factory=list[int], max_length=2000)
-    reserved_output: int | None = None
-    input_max_tokens: int | None = None
+    question: str = Field(max_length=MAX_QUESTION_CHARS)
+    chunks: int | None = Field(default=None, ge=1, le=MAX_CHUNKS, strict=True)
     debug: bool = False
 
 
 class QueryBody(_Body):
     """The body of `POST /v1/query/build` and `POST /v1/rags/{rag}/search`."""
 
-    builder: Literal["text-v1", "log-v1"] = "text-v1"
-    question: str = Field(default="", max_length=20_000)
-    log_lines: list[str] = Field(default_factory=list[str], max_length=2000)
-
-
-class TokensBody(_Body):
-    """The body of `POST /v1/tokens/count`."""
-
-    text: str = Field(max_length=MIB)
-    generator: str = "ministral-3-3b"
-
-
-class CitedChunk(_Body):
-    """One chunk of a pack: its label and its chunk ID."""
-
-    label: str = Field(max_length=8)
-    chunk_id: str = Field(max_length=2048)
-
-
-class CitationsBody(_Body):
-    """The body of `POST /v1/citations/validate`."""
-
-    answer: str = Field(max_length=MIB)
-    chunks: list[CitedChunk] = Field(max_length=10_000)
+    question: str = Field(default="", max_length=MAX_QUESTION_CHARS)
 
 
 def error_response(error: XatRagError) -> JSONResponse:
@@ -133,9 +108,7 @@ class Limiter:
 
 
 def _query(body: QueryBody) -> RetrievalQuery:
-    if body.builder == "log-v1":
-        return LogQueryBuilder().build(LogInput(tuple(body.log_lines), question=body.question))
-    return TextQueryBuilder().build(body.question)
+    return make_query(body.question)
 
 
 def _job_json(job: Job) -> dict[str, Any]:
@@ -284,7 +257,7 @@ def create_app(rag: XatRag, access_key: str, queue_limit: int, version: str) -> 
                 "embedder_sha256": manifest.embedder.sha256,
                 "dims": manifest.embedder.dims,
                 "lexical_tokenizer": manifest.lexical_tokenizer,
-                "generator_tokenizer_id": manifest.generator_tokenizer_id,
+                "size_tokenizer_id": manifest.size_tokenizer_id,
                 "index_hash": manifest.index_hash,
                 "chunkers": dict(manifest.chunkers),
             },
@@ -327,62 +300,30 @@ def create_app(rag: XatRag, access_key: str, queue_limit: int, version: str) -> 
     async def search(name: str, request: Request) -> dict[str, Any]:
         body = await json_body(request, QueryBody)
         query = await limiter.run(_query, body)
-        retrieved = await limiter.run(rag.search, name, query)
+        hits = await limiter.run(rag.search_hits, name, query)
         return {
             "query": query_json(query),
             "hits": [
                 {
-                    "chunk_id": c.chunk_id,
-                    "uri": c.chunk.uri,
-                    "span": span_json(c.chunk.span),
-                    "lexical_rank": c.scores.lexical_rank,
-                    "dense_rank": c.scores.dense_rank,
-                    "exact_rank": c.scores.exact_rank,
-                    "rrf_score": c.scores.rrf_score,
-                    "rerank_score": c.scores.rerank_score,
+                    **chunk_json(hit.chunk),
+                    "lexical_rank": hit.scores.lexical_rank,
+                    "dense_rank": hit.scores.dense_rank,
+                    "rrf_score": hit.scores.rrf_score,
+                    "rerank_score": hit.scores.rerank_score,
                 }
-                for c in retrieved.candidates
+                for hit in hits
             ],
         }
 
     @app.post("/v1/context")
     async def context(request: Request) -> dict[str, Any]:
         body = await json_body(request, ContextBody)
-        context_request = ContextRequest(
-            context=body.context,
-            question=body.question,
-            log_lines=tuple(body.log_lines),
-            selected_lines=frozenset(body.selected_lines),
-            reserved_output=body.reserved_output,
-            input_max_tokens=body.input_max_tokens,
-            debug=body.debug,
-        )
-        return pack_json(await limiter.run(rag.compose, context_request))
+        context_request = ContextRequest(body.context, body.question, body.chunks, body.debug)
+        return result_json(await limiter.run(rag.retrieve, context_request))
 
     @app.post("/v1/query/build")
     async def build_query(request: Request) -> dict[str, Any]:
         body = await json_body(request, QueryBody)
         return query_json(await limiter.run(_query, body))
-
-    @app.post("/v1/tokens/count")
-    async def count_tokens(request: Request) -> dict[str, Any]:
-        body = await json_body(request, TokensBody)
-        return {"tokens": await limiter.run(rag.count_tokens, body.text, body.generator), "generator": body.generator}
-
-    @app.get("/v1/prompts/{name}/{version}")
-    async def get_prompt(name: str, version: int) -> dict[str, Any]:
-        prompt = rag.prompt(f"prompt:{name}@{version}")
-        return {"id": prompt.prompt_id, "name": prompt.name, "version": prompt.version, "text": prompt.text}
-
-    @app.post("/v1/citations/validate")
-    async def validate(request: Request) -> dict[str, Any]:
-        body = await json_body(request, CitationsBody)
-        chunks = {item.label: item.chunk_id for item in body.chunks}
-
-        def run_check() -> dict[str, Any]:
-            check = rag.check_citations(body.answer, chunks)
-            return citation_json(check, rag.chunk_uris([c.chunk_id for c in check.citations]))
-
-        return await limiter.run(run_check)
 
     return app

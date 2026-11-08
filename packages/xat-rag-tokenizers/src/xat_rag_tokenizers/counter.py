@@ -1,4 +1,4 @@
-"""`HfTokenCounter`: counts generator tokens with a locked `tokenizer.json`."""
+"""`HfTokenCounter`: the fixed size ruler of xat-rag, from a locked `tokenizer.json`."""
 
 from pathlib import Path
 
@@ -7,7 +7,7 @@ from xat_rag_core.errors import ConfigError
 
 
 class HfTokenCounter:
-    """Counts tokens without special tokens. The chat template overhead is in the generator profile."""
+    """Counts tokens without special tokens. The count does not depend on the LLM of the app."""
 
     def __init__(self, tokenizer_file: Path, tokenizer_id: str) -> None:
         """Load the tokenizer from a local file. Check the file against the lock first."""

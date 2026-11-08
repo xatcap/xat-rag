@@ -1,8 +1,10 @@
 # 0007. Let the context recipe own the budget, and count tokens with the generator's tokenizer
 
-- Status: Accepted
+- Status: Superseded by [ADR 0014](0014-retrieval-only-and-app-side-fitting.md)
 - Date: 2026-11-07
 - Deciders: Project maintainer
+
+> This decision is superseded on 2026-11-09 by ADR 0014. xat-rag no longer owns a budget, a window or a generator profile. The tokenizer of Ministral-3-3B stays as a fixed size ruler, and ADR 0014 keeps the rules for that ruler. The text below is the history of the decision.
 
 ## Context
 

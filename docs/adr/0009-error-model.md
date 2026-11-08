@@ -12,7 +12,7 @@ Apps must show the right message for each failure. xat-rag maps each kind of fai
 
 - Each kind of failure has one error type and one HTTP status. The table is in the [API reference](../api.md#errors).
 - Errors use one body: `{"error": {"message", "type"}}`. Common failures use `invalid_request_error`, `not_found_error`, `service_unavailable_error`, `overloaded_error` and `internal_error`.
-- A context that does not fit is `context_too_large_error` (422).
+- A context that does not fit was `context_too_large_error` (422). [ADR 0014](0014-retrieval-only-and-app-side-fitting.md) removes this error type, because xat-rag no longer fits a context.
 - One mapping in the code converts the errors of the library to HTTP responses. The match covers all error types.
 - xat-rag never retries a stage.
 - Each stage of a context request has a time limit that the context recipe sets. Ingestion runs as a job that the caller can cancel. A stage that takes too long gives `stage_timeout_error` (504), and the message names the stage.

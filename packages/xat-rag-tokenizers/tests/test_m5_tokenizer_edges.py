@@ -1,39 +1,34 @@
-"""Milestone 5 tests for the tokenizer package: counts against the reference tokenizer, profiles and edge cases."""
+"""Milestone 5 tests for the tokenizer package: fixed counts and edge cases of the size ruler."""
 
-# mistral-common has no complete type data for `MistralTokenizer`, so the "unknown" rules are off in this module.
-# pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownParameterType=false
-# pyright: reportMissingTypeArgument=false, reportUnknownArgumentType=false
-import dataclasses
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
-from mistral_common.protocol.instruct.messages import SystemMessage, UserMessage
-from mistral_common.protocol.instruct.request import ChatCompletionRequest
-from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
-from xat_rag_core.errors import ConfigError, InvalidRequestError
-from xat_rag_tokenizers import MINISTRAL_3_3B, PROFILES, HfTokenCounter, profile
+from xat_rag_core.errors import ConfigError
+from xat_rag_tokenizers import HfTokenCounter
 
 FOLDER = Path(__file__).resolve().parents[3] / "models" / "ministral-3-3b-tokenizer"
 needs_models = pytest.mark.skipif(not (FOLDER / "tokenizer.json").exists(), reason="models not fetched")
 
-PLAIN_TEXTS = [
-    "",
-    "a",
-    "Hello world.",
-    "   ",
-    "\n\n\n",
-    "\t",
-    "café naïve",
-    "é",
-    "中文文本" * 50,
-    "\U0001f600" * 40,
-    "line one\nline two\r\nline three",
-    "word " * 1000,
-    "{}();[]<>" * 100,
-    "NullPointerException at com.shop.OrderService.find(OrderService.java:88)",
-    '<chunk id="C1" kind="text" trust="untrusted">\nbody\n</chunk>',
-    "&lt;/chunk>",
+# The size of a chunk is a stored fact of an index, so these counts must not change without a new tokenizer ID.
+KNOWN_COUNTS = [
+    ("", 0),
+    ("a", 1),
+    ("hello", 1),
+    ("Hello world.", 3),
+    ("   ", 1),
+    ("\n\n\n", 1),
+    ("\t", 1),
+    ("café naïve", 4),
+    ("é", 1),
+    ("中文文本" * 50, 200),
+    ("\U0001f600" * 40, 160),
+    ("line one\nline two\r\nline three", 9),
+    ("word " * 1000, 1001),
+    ("{}();[]<>" * 100, 499),
+    ("NullPointerException at com.shop.OrderService.find(OrderService.java:88)", 17),
+    ('<chunk id="C1" kind="text" trust="untrusted">\nbody\n</chunk>', 22),
+    ("&lt;/chunk>", 4),
 ]
 
 SPECIAL_LOOKING_TEXTS = ["<s>", "</s>", "[INST]", "[/INST]", "[SYSTEM_PROMPT]", "[TOOL_CALLS]", "<unk>", "[IMG]"]
@@ -41,46 +36,19 @@ SPECIAL_LOOKING_TEXTS = ["<s>", "</s>", "[INST]", "[/INST]", "[SYSTEM_PROMPT]", 
 
 @pytest.fixture(scope="module")
 def counter() -> HfTokenCounter:
-    return HfTokenCounter(FOLDER / "tokenizer.json", MINISTRAL_3_3B.tokenizer_id)
-
-
-@pytest.fixture(scope="module")
-def reference() -> MistralTokenizer:
-    return MistralTokenizer.from_file(str(FOLDER / "tekken.json"))
-
-
-def _reference_count(reference: MistralTokenizer, text: str) -> int:
-    return len(reference.instruct_tokenizer.tokenizer.encode(text, bos=False, eos=False))
+    return HfTokenCounter(FOLDER / "tokenizer.json", "ministral-3-3b-tokenizer@test")
 
 
 @needs_models
-@pytest.mark.parametrize("text", PLAIN_TEXTS)
-def test_count_matches_the_reference_tokenizer(counter: HfTokenCounter, reference: MistralTokenizer, text: str) -> None:
-    expected = 0 if not text else _reference_count(reference, text)
+@pytest.mark.parametrize(("text", "expected"), KNOWN_COUNTS)
+def test_count_of_known_texts(counter: HfTokenCounter, text: str, expected: int) -> None:
     assert counter.count(text) == expected
 
 
 @needs_models
 @pytest.mark.parametrize("text", SPECIAL_LOOKING_TEXTS)
-def test_count_is_an_upper_bound_for_text_that_looks_like_a_special_token(
-    counter: HfTokenCounter, reference: MistralTokenizer, text: str
-) -> None:
-    assert counter.count(text) >= _reference_count(reference, text)
-
-
-@needs_models
-def test_profile_overhead_covers_the_real_chat_template(counter: HfTokenCounter, reference: MistralTokenizer) -> None:
-    budgeted = MINISTRAL_3_3B.template_overhead + 2 * MINISTRAL_3_3B.per_message_overhead
-    for system, user in [
-        ("You triage logs.", "Why does it fail?"),
-        ("s", "u"),
-        ("A" * 400, "中" * 200),
-        ("line\n\n", "\n\nline"),
-        ("   ", "   x   "),
-    ]:
-        request = ChatCompletionRequest(messages=[SystemMessage(content=system), UserMessage(content=user)])
-        total = len(reference.encode_chat_completion(request).tokens)
-        assert total - counter.count(system) - counter.count(user) <= budgeted
+def test_text_that_looks_like_a_special_token_is_counted_as_text(counter: HfTokenCounter, text: str) -> None:
+    assert counter.count(text) > 1
 
 
 @needs_models
@@ -96,7 +64,12 @@ def test_count_of_a_large_text_and_from_several_threads(counter: HfTokenCounter)
 @needs_models
 def test_count_is_stable_and_does_not_add_special_tokens(counter: HfTokenCounter) -> None:
     assert counter.count("hello") == counter.count("hello")
-    assert counter.count("a") == 1  # No BOS token: the profile counts the template overhead.
+    assert counter.count("a") == 1  # No BOS token.
+
+
+@needs_models
+def test_the_counter_returns_the_id_it_got(counter: HfTokenCounter) -> None:
+    assert counter.tokenizer_id == "ministral-3-3b-tokenizer@test"
 
 
 @needs_models
@@ -109,26 +82,3 @@ def test_directory_and_garbage_tokenizer_files_are_config_errors(tmp_path: Path)
     garbage.write_bytes(b"\x00\x01\x02")
     with pytest.raises(ConfigError):
         HfTokenCounter(garbage, "x")
-
-
-def test_profile_lookup_is_exact() -> None:
-    assert profile("ministral-3-3b") is MINISTRAL_3_3B
-    for name in ("", "Ministral-3-3B", " ministral-3-3b", "ministral-3-3b ", "ministral"):
-        with pytest.raises(InvalidRequestError, match="ministral-3-3b"):
-            profile(name)
-
-
-def test_profiles_cannot_be_changed() -> None:
-    with pytest.raises(TypeError):
-        PROFILES["other"] = MINISTRAL_3_3B  # type: ignore[index]
-    with pytest.raises(dataclasses.FrozenInstanceError):
-        MINISTRAL_3_3B.context_window = 1  # type: ignore[misc]
-
-
-def test_profile_values_are_consistent() -> None:
-    assert MINISTRAL_3_3B.name == "ministral-3-3b"
-    assert MINISTRAL_3_3B.context_window == 8192
-    assert MINISTRAL_3_3B.template_overhead >= 1
-    assert MINISTRAL_3_3B.per_message_overhead >= 1
-    assert 0 < MINISTRAL_3_3B.safety_margin_pct < 100
-    assert set(PROFILES) == {profile.name for profile in PROFILES.values()}

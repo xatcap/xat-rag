@@ -27,16 +27,16 @@ def test_bad_k_is_refused() -> None:
 
 
 def test_equal_rank_sets_tie_on_chunk_id() -> None:
-    # a has ranks (exact 40, lexical 39, dense 32), b has (exact 32, lexical 40, dense 39).
+    # a has ranks (first 40, lexical 39, dense 32), b has (first 32, lexical 40, dense 39).
     def at(positions: dict[int, str], prefix: str) -> list[str]:
         return [positions.get(rank, f"{prefix}{rank}") for rank in range(1, 41)]
 
-    exact = at({32: "b", 40: "a"}, "x")
+    first = at({32: "b", 40: "a"}, "x")
     lexical = at({39: "a", 40: "b"}, "l")
     dense = at({32: "a", 39: "b"}, "d")
     fused = {
-        item.chunk_id: item for item in reciprocal_rank_fusion({"exact": exact, "lexical": lexical, "dense": dense})
+        item.chunk_id: item for item in reciprocal_rank_fusion({"first": first, "lexical": lexical, "dense": dense})
     }
     assert fused["a"].score == fused["b"].score
-    order = [item.chunk_id for item in reciprocal_rank_fusion({"exact": exact, "lexical": lexical, "dense": dense})]
+    order = [item.chunk_id for item in reciprocal_rank_fusion({"first": first, "lexical": lexical, "dense": dense})]
     assert order.index("a") < order.index("b")

@@ -1,0 +1,1 @@
+{"key": "PROJ-301", "fields": {"summary": "Duplicate shipping labels for split orders", "description": "ShippingLabelService prints two labels when an order is split between warehouses.", "status": {"name": "Done"}, "resolution": {"name": "Fixed"}}}

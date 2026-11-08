@@ -5,7 +5,7 @@ description = "The evaluation harness of xat-rag: golden sets, retrieval metrics
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
-dependencies = ["xat-rag", "xat-rag-core", "xat-rag-logs"]
+dependencies = ["xat-rag", "xat-rag-core"]
 
 [project.scripts]
 xat-rag-eval = "xat_rag_eval.cli:main"
@@ -13,7 +13,6 @@ xat-rag-eval = "xat_rag_eval.cli:main"
 [tool.uv.sources]
 xat-rag = { workspace = true }
 xat-rag-core = { workspace = true }
-xat-rag-logs = { workspace = true }
 
 [build-system]
 requires = ["hatchling>=1.25"]

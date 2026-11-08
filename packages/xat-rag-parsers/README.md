@@ -10,6 +10,6 @@ Text parsers and the structural chunker of xat-rag. See the [architecture, secti
 | `JiraParser` (`jira-v1`) | `jira` | The summary and the description (`desc`), then one section for each comment. Author names are never in the text. |
 | `PromptParser` (`prompt-v1`) | `prompt` | One section, never split. |
 
-`StructuralChunker` turns sections into chunks. A section that is larger than `max_chunk_tokens` (in generator tokens) or than the embedder input is split again. The splitter is LangChain `RecursiveCharacterTextSplitter`, and it counts with both token counters. The chunker also sanitizes the headers and the metadata of each section.
+`StructuralChunker` turns sections into chunks. A section that is larger than `max_chunk_tokens` (in size ruler tokens) or than the embedder input is split again. The splitter is LangChain `RecursiveCharacterTextSplitter`, and it counts with both token counters. The chunker also sanitizes the headers and the metadata of each section.
 
 The parsers get bytes. They never read files or the network.

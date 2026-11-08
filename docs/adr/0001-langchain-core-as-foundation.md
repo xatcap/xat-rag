@@ -4,6 +4,8 @@
 - Date: 2026-11-07
 - Deciders: Project maintainer
 
+> Note (2026-11-09): The log query builder and the exact lookups are removed. See [ADR 0013](0013-remove-log-handling-and-exact-lookups.md). The budget packer, the renderer and the citation validator are removed. See [ADR 0014](0014-retrieval-only-and-app-side-fitting.md). The store, the query and the retrievers stay our own.
+
 ## History
 
 The first version of this ADR (2026-11-07) chose no framework. The maintainer then chose LangChain as the foundation. The maintainer also chose our own retrievers on LangChain interfaces, after measurements of the LangChain community retrievers. The facts below were checked against the source and the releases on 2026-11-07.

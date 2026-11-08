@@ -128,9 +128,11 @@ def test_with_rank_rejects_an_unknown_stage_and_does_not_change_the_original() -
     document = _good()
     with pytest.raises(InternalError):
         lc_codec.with_rank(document, "rerank", 1)
-    ranked = lc_codec.with_rank(document, "exact", 3)
-    assert "exact_rank" not in document.metadata
-    assert _meta(ranked)["exact_rank"] == 3
+    with pytest.raises(InternalError):
+        lc_codec.with_rank(document, "exact", 3)
+    ranked = lc_codec.with_rank(document, "dense", 3)
+    assert "dense_rank" not in document.metadata
+    assert _meta(ranked)["dense_rank"] == 3
     assert ranked.id == document.id
     assert lc_codec.with_rank(document, "lexical", 1).metadata["lexical_rank"] == 1
 

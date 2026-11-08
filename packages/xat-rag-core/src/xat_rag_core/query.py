@@ -1,4 +1,4 @@
-"""The retrieval query, exact lookups and hard filters."""
+"""The retrieval query and hard filters."""
 
 import re
 from dataclasses import dataclass, field
@@ -76,57 +76,37 @@ class Filter:
 
 
 @dataclass(frozen=True, slots=True)
-class ExactLookup:
-    """An exact metadata lookup. It adds candidates. It never removes candidates."""
-
-    field: str
-    value: str
-
-    def __post_init__(self) -> None:
-        """Check the field name."""
-        check_field_name(self.field)
-
-
-@dataclass(frozen=True, slots=True)
 class RetrievalQuery:
     """The query parts. Each retrieval stage gets its own text."""
 
     lexical_terms: tuple[str, ...] = ()
     dense_text: str = ""
     rerank_text: str = ""
-    exact_lookups: tuple[ExactLookup, ...] = ()
     filters: Filter = field(default_factory=Filter)
 
 
 _TERM = re.compile(r"[^\W_][\w.$/:#@-]{0,80}")
 _EDGE_PUNCTUATION = ".:/#@-"
+_MAX_LEXICAL_TERMS = 32
+_MAX_RERANK_CHARS = 600
+MAX_QUESTION_CHARS = 20_000
 
 
-class TextQueryBuilder:
-    """Builds a retrieval query from a question (`text-v1`). The same question gives the same query."""
+def build_query(question: str) -> RetrievalQuery:
+    """Return the retrieval query for a question. The same question gives the same query.
 
-    def __init__(self, filters: Filter | None = None, max_lexical_terms: int = 32) -> None:
-        """Make a builder. `filters` are the hard filters from the recipe, if any."""
-        if not 1 <= max_lexical_terms <= 256:
-            raise InvalidRequestError("max_lexical_terms must be between 1 and 256.")
-        self._filters = filters if filters is not None else Filter()
-        self._max_terms = max_lexical_terms
-
-    @property
-    def name(self) -> str:
-        """The name of the builder in recipes."""
-        return "text-v1"
-
-    def build(self, query_input: str) -> RetrievalQuery:
-        """Return the retrieval query for a question. Terms are unique without case, and keep code names whole."""
-        question = " ".join(sanitize_text(query_input).split())
-        terms: dict[str, str] = {}
-        for match in _TERM.finditer(question):
-            term = match.group(0).rstrip(_EDGE_PUNCTUATION)
-            terms.setdefault(term.lower(), term)
-        return RetrievalQuery(
-            lexical_terms=tuple(terms.values())[: self._max_terms],
-            dense_text=question[:2000],
-            rerank_text=question[:600],
-            filters=self._filters,
-        )
+    Terms are unique without case, and keep code names whole. Raise `InvalidRequestError` for a
+    question with more than `MAX_QUESTION_CHARS` characters.
+    """
+    if len(question) > MAX_QUESTION_CHARS:
+        raise InvalidRequestError(f"A question can have at most {MAX_QUESTION_CHARS} characters.")
+    text = " ".join(sanitize_text(question).split())
+    terms: dict[str, str] = {}
+    for match in _TERM.finditer(text):
+        term = match.group(0).rstrip(_EDGE_PUNCTUATION)
+        terms.setdefault(term.lower(), term)
+    return RetrievalQuery(
+        lexical_terms=tuple(terms.values())[:_MAX_LEXICAL_TERMS],
+        dense_text=text,
+        rerank_text=text[:_MAX_RERANK_CHARS],
+    )

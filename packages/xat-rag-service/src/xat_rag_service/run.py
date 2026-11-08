@@ -132,7 +132,6 @@ def run(hardening: Hardening) -> int:
                 recipes_folder=settings.recipes_folder,
                 models_folder=settings.models_folder,
                 lock_file=settings.lock_file,
-                prompts_folder=settings.prompts_folder,
                 threads=settings.threads,
             )
         )

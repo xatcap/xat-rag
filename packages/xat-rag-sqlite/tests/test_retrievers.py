@@ -1,11 +1,12 @@
 from pathlib import Path
 
 import numpy as np
+import xat_rag_sqlite.retrievers as retrievers_module
 from langchain_core.embeddings import DeterministicFakeEmbedding
 from test_store import DIMS, chunk, document, manifest
 from xat_rag_core import lc_codec
-from xat_rag_core.query import ExactLookup, Filter
-from xat_rag_sqlite.retrievers import ExactLookupRetriever, Fts5Retriever, VecRetriever
+from xat_rag_core.query import Equals, Filter
+from xat_rag_sqlite.retrievers import Fts5Retriever, VecRetriever
 from xat_rag_sqlite.store import SqliteRagStore
 
 EMBED = DeterministicFakeEmbedding(size=DIMS)
@@ -40,9 +41,15 @@ def test_vec_retriever_finds_the_same_text(tmp_path: Path) -> None:
     assert lc_codec.document_to_candidate(docs[0]).scores.dense_rank == 1
 
 
-def test_exact_lookup_retriever(tmp_path: Path) -> None:
+def test_retrievers_apply_the_filters_before_the_cut(tmp_path: Path) -> None:
     store = _store(tmp_path)
-    retriever = ExactLookupRetriever(store=store, lookups=(ExactLookup("jira_key", "P-2"),), filters=Filter())
-    docs = retriever.invoke("")
-    assert [lc_codec.chunk_id_of(d) for d in docs] == ["jira:P-2#desc"]
-    assert lc_codec.document_to_candidate(docs[0]).scores.exact_rank == 1
+    only_p1 = Filter((Equals("jira_key", "P-1"),))
+    lexical = Fts5Retriever(store=store, k=5, filters=only_p1).invoke("OrderService PaymentClient")
+    dense = VecRetriever(store=store, embeddings=EMBED, k=5, filters=only_p1).invoke("Docs about nothing")
+    assert [lc_codec.chunk_id_of(d) for d in lexical] == ["jira:P-1#desc"]
+    assert [lc_codec.chunk_id_of(d) for d in dense] == ["jira:P-1#desc"]
+    assert lc_codec.document_to_candidate(dense[0]).scores.dense_rank == 1
+
+
+def test_there_is_no_exact_lookup_retriever() -> None:
+    assert not hasattr(retrievers_module, "ExactLookupRetriever")

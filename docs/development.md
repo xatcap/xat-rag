@@ -31,7 +31,6 @@ The tests need the model files. Run step 2 before `pytest`.
 | Types (strict) | `uv run pyright` |
 | Import rules | `uv run lint-imports` |
 | All tests | `uv run pytest` |
-| Generator tokenizer check | `uv run python tools/measure_profile.py --check` |
 | Dependency check | `uv run python tools/check_dependencies.py` |
 | Retrieval gate | `uv run xat-rag-eval run --setup eval/fixtures/setup --golden eval/fixtures/golden.jsonl --data <new or empty folder> --baseline eval/baseline.json` |
 | Frozen service | `uv run python build/release.py package` |
@@ -48,46 +47,50 @@ Some checks run only where they are useful:
   sudo unshare --net -- sh -c "ip link set lo up && sudo -E -u $USER env PATH=$PATH .venv/bin/python -m pytest packages/xat-rag-service packages/xat-rag -p no:cacheprovider"
   ```
 
-- `uv run python tools/measure_profile.py` (without `--check`) prints the measured overheads of the generator profile. This tool needs `mistral-common`, which is a development dependency.
-
 ## Tools
 
 | Script | What it does | Shipped |
 |---|---|---|
 | `tools/fetch_models.py` | Gets the model files from the Hugging Face hub and checks the size and sha256 of each file. With `--write-lock`, it reads `build/models.sources.json`, gets the files and writes `build/models.lock.json`. Use `--write-lock` only for a reviewed model change. | No |
-| `tools/measure_profile.py` | Compares the token counts of xat-rag with `mistral-common` on a fixed text set (`--check`). It also prints the template and message overheads. It uses `tekken.json`, which the runtime does not need. | No |
 | `tools/check_dependencies.py` | Compares the runtime packages of `uv.lock` with `build/dependencies.allow.json`. It follows the extras of each package, and it finds the workspace packages from the lock source. It fails on a package on the denylist, on a copyleft license (even next to a permissive one), on a license that is unknown, and on a new, removed or changed package. `--write` refuses to write when the check has problems. Use `--write` only after a reviewed change. | No |
 
 The denylist and the license rules are in `tools/check_dependencies.py`. The allowlist is in `build/dependencies.allow.json`. The denylist includes `openai`, `posthog`, `tiktoken`, `torch`, `transformers`, `langchain-community` and `langchain-classic`.
 
 ## Retrieval gate
 
-`xat-rag-eval` runs a golden set against the fixture corpus. The fixture set is in `eval/fixtures/setup`. It has three RAGs (`docs`, `jira` and `diffs`), two context recipes and a pinned prompt. The golden set is `eval/fixtures/golden.jsonl`.
+`xat-rag-eval` runs a golden set against the fixture corpus. The fixture set is in `eval/fixtures/setup`. It has three RAGs (`docs`, `jira` and `diffs`) and two context recipes (`ask-docs` and `triage`). The golden set is `eval/fixtures/golden.jsonl`.
 
-Each golden case has these fields:
+Each golden case has these fields. Unknown fields are errors.
 
 - `id`: unique in the set.
-- `context` and `rag`: the context recipe, and the RAG whose candidates the stage metrics use. Ranks and RRF scores are per RAG, so a case measures one RAG only.
+- `context` and `rag`: the context recipe, and the RAG whose candidates the stage metrics use. Ranks and RRF scores are per RAG, so the stage metrics measure one RAG only.
 - `kind`: the source kind, used for the report.
-- `question` or `log_lines`: at least one of them.
+- `question`: the question. It must have text.
 - `relevant`: at least one item. Each item has exactly one of `chunk_id` or `doc_id`, and a `grade` from 1 to 3. A case scores chunks, or it scores documents. It cannot mix both.
 
 The command needs a baseline file. The `--data` folder must be new or empty, so that old indexes do not change the result. The command prints a JSON report. It exits with 1 when the gate fails.
 
-The stages are `lexical`, `dense`, `exact`, `fused` and `reranked`. The `reranked` stage is the order that the packer gets. It comes after the reranker, duplicate removal and MMR.
+The report has two kinds of metrics:
+
+- **Stage metrics.** For each RAG of a case, the report has the recall at 10, the nDCG at 10 and the MRR. It has them after each stage: `lexical`, `dense`, `fused` and `reranked`. The `reranked` stage is the order after the reranker, duplicate removal and MMR.
+- **Final metrics.** For each kind, the report has the recall at 3, 5 and 10 of the final list of the context request. It also has the MRR of the final list and the source coverage. The final list is the merge of all RAGs of the context, cut to 10 chunks. For a document-level case, the recall counts the documents in the first N chunks. The source coverage is the share of cases in which the case RAG gives at least one chunk to the final list.
 
 The gate fails closed. It fails on these problems:
 
-- A budget problem. A prompt must fit the window minus the reserved output and the safety margin.
-- A pack that changes between two runs.
+- An invariant problem in the final list of a case. The list has more than 10 chunks, a chunk ID that repeats, or a score that is higher than the score before it.
+- A final list that changes between two runs of the same case.
 - A kind that is in only one of the report and the baseline.
-- A drop of more than 2 points (200 basis points) in the reranked recall@10 or in the pack recall of a kind. A drop of exactly 2 points passes.
+- A drop of more than 2 points (200 basis points) in the recall at 10 of the `reranked` stage of a kind.
+- A drop of more than 2 points (200 basis points) in the final recall at 5 or at 10 of a kind. A drop of exactly 2 points passes.
+- A drop of more than 10 points (1000 basis points) in the final MRR of a kind.
 
-`--write-baseline` writes a new baseline after an agreed change. It refuses to write when the budget or determinism problems exist. It writes only the `kinds` object, without timings. Then review the diff of `eval/baseline.json`.
+The final recall at 3 and the source coverage are reported only. They do not fail the gate.
+
+`--write-baseline` writes a new baseline after an agreed change. It refuses to write when the invariant or determinism problems exist. It writes only the `kinds` object, without timings. Then review the diff of `eval/baseline.json`.
 
 Known limit: one `eval/baseline.json` is shared by the three operating systems. The int8 ONNX numbers can differ a little by CPU and by batch. A per-system baseline can be needed later.
 
-The evaluation harness calls no generator. See the [architecture](architecture.md#13-evaluation), section 13.
+The evaluation harness calls no LLM. See the [architecture](architecture.md#13-evaluation), section 13.
 
 ### Chunk-boundary test
 
@@ -108,7 +111,6 @@ The service needs the settings in [API reference](api.md#settings). For a local 
 ```bash
 export XatRag__DataFolder="$PWD/build/out/dev-data"
 export XatRag__RecipesFolder="$PWD/eval/fixtures/setup/recipes"
-export XatRag__PromptsFolder="$PWD/eval/fixtures/setup/prompts"
 export XatRag__ModelsFolder="$PWD/models"
 export XatRag__LockFile="$PWD/build/models.lock.json"
 export XatRag__AccessKey="$(python3 -c 'import secrets; print(secrets.token_hex(16))')"
@@ -124,7 +126,7 @@ When the service is ready, the ready file holds its URL. Read the `url` field fr
 
 - `package` runs PyInstaller with `build/xat-rag-service.spec`. The output is one folder, `build/out/dist/xat-rag-service/`. It contains the executable and the libraries. The models are not in the folder. The app installs them next to it. The spec excludes the modules of ADR 0011, section 4, and the optional imports that the service does not use, such as PIL, setuptools and `pkg_resources`.
 - `check-bundle` fails when a denied module is in the frozen folder. It checks the folder, the native libraries and the modules in the archive.
-- `smoke-test` starts the frozen executable with the fixture setup. It ingests `eval/fixtures/setup/documents/docs/orders.md` with the access key, waits for the job, and asks the `ask-docs` context for the port of the orders service. The test passes when the first chunk has the expected chunk ID. The service has 300 seconds to start. The stderr output goes to a file in the test folder. If the service does not start in time, the test stops it and fails.
+- `smoke-test` starts the frozen executable with the fixture setup. It ingests `eval/fixtures/setup/documents/docs/orders.md` with the access key, waits for the job, and asks the `ask-docs` context about the port of the orders service. The test passes when the first chunk has the expected chunk ID and source document. The service has 300 seconds to start. The stderr output goes to a file in the test folder. If the service does not start in time, the test stops it and fails.
 
 [ADR 0002](adr/0002-python.md#measured-v01) records the measured size and start times.
 
@@ -143,9 +145,8 @@ The `check` job runs on Ubuntu, macOS 14 and Windows, with a timeout of 45 minut
 3. `pyright`.
 4. `lint-imports`.
 5. `pytest`, which includes the chunk-boundary test.
-6. `tools/measure_profile.py --check`.
-7. `tools/check_dependencies.py`.
-8. The retrieval gate with `eval/baseline.json`.
+6. `tools/check_dependencies.py`.
+7. The retrieval gate with `eval/baseline.json`.
 
 The `offline` job runs on Ubuntu after `check`, with a timeout of 30 minutes. It runs the service and library tests in a new network namespace (`sudo unshare --net`). The job brings the loopback interface up, so the tests can use loopback only. It sets `LANGSMITH_TRACING`, `LANGSMITH_API_KEY` and `LANGSMITH_RUNS_ENDPOINTS`. A connection outside loopback fails in this job. The job uses no packet capture yet.
 
@@ -156,7 +157,7 @@ The `package` job runs on Ubuntu, macOS 14 and Windows after `check`, with a tim
 Read the [architecture](architecture.md#15-extension-points), section 15, first. Each change needs these steps:
 
 1. Add or change the code and its tests.
-2. Update the recipe schema and the manifest version, if the index changes. A change to the index needs a rebuild note.
+2. Update the recipe schema and the manifest version, if the index changes. A change to the index needs a rebuild note in the [changelog](../CHANGELOG.md).
 3. Run the commands in this page.
 4. Update the [API reference](api.md) and the [architecture](architecture.md) when a route, a setting or an error changes.
 5. Add or update an ADR when the decision changes.

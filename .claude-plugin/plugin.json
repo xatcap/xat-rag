@@ -1,0 +1,10 @@
+{
+  "$schema": "https://www.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "xat-rag-workflow",
+  "version": "0.1.0",
+  "description": "Workspace subagents, skills, and deterministic lifecycle hooks for xat-rag.",
+  "agents": "./.agents/agents",
+  "skills": "./.agents/skills",
+  "hooks": "./.agents/hooks/claude-hooks.json"
+}
+

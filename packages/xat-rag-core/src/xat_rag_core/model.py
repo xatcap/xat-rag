@@ -95,7 +95,6 @@ class StageScores:
 
     lexical_rank: int | None = None
     dense_rank: int | None = None
-    exact_rank: int | None = None
     rrf_score: float | None = None
     rerank_score: float | None = None
     rerank_truncated: bool = False

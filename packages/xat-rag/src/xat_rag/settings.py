@@ -16,6 +16,5 @@ class Settings:
     recipes_folder: Path
     models_folder: Path
     lock_file: Path
-    prompts_folder: Path | None = None
     threads: int = 0
     parse_deadline_seconds: float = 60.0

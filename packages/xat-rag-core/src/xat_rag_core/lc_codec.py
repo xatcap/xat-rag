@@ -52,7 +52,6 @@ class ChunkMeta(TypedDict):
     source: dict[str, Scalar]
     lexical_rank: NotRequired[int | None]
     dense_rank: NotRequired[int | None]
-    exact_rank: NotRequired[int | None]
     rrf_score: NotRequired[float | None]
     rerank_score: NotRequired[float | None]
     rerank_truncated: NotRequired[bool]
@@ -107,7 +106,6 @@ def chunk_to_document(chunk: Chunk, scores: StageScores | None = None) -> Docume
     if scores is not None:
         meta["lexical_rank"] = scores.lexical_rank
         meta["dense_rank"] = scores.dense_rank
-        meta["exact_rank"] = scores.exact_rank
         meta["rrf_score"] = scores.rrf_score
         meta["rerank_score"] = scores.rerank_score
         meta["rerank_truncated"] = scores.rerank_truncated
@@ -154,7 +152,6 @@ def document_to_candidate(document: Document) -> Candidate:
     scores = StageScores(
         lexical_rank=meta.get("lexical_rank"),
         dense_rank=meta.get("dense_rank"),
-        exact_rank=meta.get("exact_rank"),
         rrf_score=meta.get("rrf_score"),
         rerank_score=meta.get("rerank_score"),
         rerank_truncated=meta.get("rerank_truncated", False),
@@ -182,8 +179,8 @@ def with_rerank_score(document: Document, score: float, truncated: bool) -> Docu
 
 
 def with_rank(document: Document, stage: str, rank: int) -> Document:
-    """Return a copy of `document` with its rank at `stage` (`lexical`, `dense` or `exact`)."""
-    key = {"lexical": "lexical_rank", "dense": "dense_rank", "exact": "exact_rank"}.get(stage)
+    """Return a copy of `document` with its rank at `stage` (`lexical` or `dense`)."""
+    key = {"lexical": "lexical_rank", "dense": "dense_rank"}.get(stage)
     if key is None:
         raise InternalError("The stage of a rank is unknown.")
     meta = copy.deepcopy(dict(_meta(document)))

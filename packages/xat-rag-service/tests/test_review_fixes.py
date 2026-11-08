@@ -28,7 +28,6 @@ def _settings(env: dict[str, str]) -> Settings:
         recipes_folder=Path(env["XatRag__RecipesFolder"]),
         models_folder=MODELS,
         lock_file=Path(env["XatRag__LockFile"]),
-        prompts_folder=Path(env["XatRag__PromptsFolder"]),
         threads=1,
     )
 
@@ -54,16 +53,14 @@ def test_upload_parser_limits_and_shape() -> None:
         read_upload(deep_type, deep)
 
 
-def test_long_questions_are_cut_not_refused(client: TestClient) -> None:
+def test_long_questions_are_not_cut_and_never_a_500(client: TestClient) -> None:
     for question in ("0x" + "deadbeef" * 300, "設定" * 900, "com.shop.Order$Inner.find(" * 70):
         response = client.post("/v1/context", json={"context": "ask", "question": question[:20000]}, headers=AUTH)
-        # Too many generator tokens for the input cap is a 400. Too many model tokens is never a 500.
-        assert response.status_code in {200, 400}, response.text
-        assert response.json().get("error", {}).get("type", "invalid_request_error") == "invalid_request_error"
-    short = client.post(
-        "/v1/context", json={"context": "ask", "question": "com.shop.Order$Inner.find(" * 40}, headers=AUTH
-    )
-    assert short.status_code == 200, short.text
+        assert response.status_code == 200, response.text
+    longest = client.post("/v1/context", json={"context": "ask", "question": "設" * 20000}, headers=AUTH)
+    assert longest.status_code == 200, longest.text
+    too_long = client.post("/v1/context", json={"context": "ask", "question": "設" * 20001}, headers=AUTH)
+    assert too_long.status_code == 400, too_long.text
 
 
 def test_unknown_field_names_are_not_echoed(client: TestClient) -> None:
@@ -95,8 +92,20 @@ def test_rebuild_is_refused_while_a_job_runs(client: TestClient) -> None:
 def test_recipe_errors_stop_the_start(tmp_path: Path) -> None:
     env = write_setup(tmp_path)
     context = tmp_path / "recipes" / "contexts" / "ask.toml"
-    context.write_text(context.read_text().replace("prompt:helper@1", "prompt:missing@1"))
-    with pytest.raises(ConfigError, match="pins a prompt"):
+    context.write_text(context.read_text().replace('name = "ask"', 'name = "ask"\npinned = ["prompt:missing@1"]'))
+    with pytest.raises(ConfigError, match=r"context\.pinned"):
+        XatRag.open(_settings(env))
+
+
+def test_different_rrf_k_without_a_reranker_stops_the_start(tmp_path: Path) -> None:
+    env = write_setup(tmp_path)
+    rags = tmp_path / "recipes" / "rags"
+    for name, k in (("docs", 60), ("manuals", 20)):
+        recipe = (rags / f"{name}.toml").read_text().replace("ms-marco-minilm-l6-v2", "none")
+        (rags / f"{name}.toml").write_text(recipe + f"\n[retrieval]\nrrf_k = {k}\n")
+    context = tmp_path / "recipes" / "contexts" / "ask.toml"
+    context.write_text(context.read_text() + '\n[[context.sources]]\nrag = "manuals"\n')
+    with pytest.raises(ConfigError, match="one rrf_k"):
         XatRag.open(_settings(env))
 
 

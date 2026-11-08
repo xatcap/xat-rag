@@ -1,0 +1,6 @@
+--- a/config/payments.yaml
++++ b/config/payments.yaml
+@@ -8,2 +8,2 @@ provider:
+-  max_retries: 2
++  max_retries: 5
+   timeout_ms: 3000

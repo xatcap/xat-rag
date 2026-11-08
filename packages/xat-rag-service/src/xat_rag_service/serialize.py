@@ -3,8 +3,7 @@
 from dataclasses import asdict
 from typing import Any
 
-from xat_rag.types import ContextPack, DocumentResult
-from xat_rag_core.citations import CitationCheck
+from xat_rag.types import DocumentResult, RetrievalResult, RetrievedChunk
 from xat_rag_core.model import BlockSpan, LineSpan, PageSpan, Span
 from xat_rag_core.query import RetrievalQuery
 
@@ -34,20 +33,36 @@ def document_result_json(result: DocumentResult) -> dict[str, Any]:
     return data
 
 
-def pack_json(pack: ContextPack) -> dict[str, Any]:
-    """Return a context pack."""
+def chunk_json(chunk: RetrievedChunk) -> dict[str, Any]:
+    """Return one retrieved chunk."""
+    source = chunk.source
     return {
-        "pack_id": pack.pack_id,
-        "generator": pack.generator,
-        "max_tokens": pack.max_tokens,
-        "budget": asdict(pack.budget),
-        "pinned": [{"id": item.prompt_id, "tokens": item.tokens, "text": item.text} for item in pack.pinned],
-        "chunks": [{**asdict(chunk), "span": span_json(chunk.span)} for chunk in pack.chunks],
-        "input": asdict(pack.input),
-        "rendered": {"messages": [{"role": m.role, "content": m.content} for m in pack.messages]},
-        "citation": {"grammar": pack.grammar, "json_schema": pack.json_schema},
-        "omitted": [asdict(item) for item in pack.omitted],
-        "debug": None if pack.debug is None else [asdict(item) for item in pack.debug],
+        "chunk_id": chunk.chunk_id,
+        "parent_id": chunk.parent_id,
+        "kind": chunk.kind,
+        "score": chunk.score,
+        "size_tokens": chunk.size_tokens,
+        "header": chunk.header,
+        "text": chunk.text,
+        "source": {
+            "rag": source.rag,
+            "doc_id": source.doc_id,
+            "source_kind": source.source_kind,
+            "uri": source.uri,
+            "title": source.title,
+            "version": source.version,
+            "span": span_json(source.span),
+        },
+        "metadata": dict(chunk.metadata),
+    }
+
+
+def result_json(result: RetrievalResult) -> dict[str, Any]:
+    """Return the result of a context request."""
+    return {
+        "chunks": [chunk_json(chunk) for chunk in result.chunks],
+        "omitted": [asdict(item) for item in result.omitted],
+        "debug": None if result.debug is None else [asdict(item) for item in result.debug],
     }
 
 
@@ -57,19 +72,4 @@ def query_json(query: RetrievalQuery) -> dict[str, Any]:
         "lexical_terms": list(query.lexical_terms),
         "dense_text": query.dense_text,
         "rerank_text": query.rerank_text,
-        "exact_lookups": [{"field": lookup.field, "value": lookup.value} for lookup in query.exact_lookups],
-    }
-
-
-def citation_json(check: CitationCheck, uris: dict[str, str]) -> dict[str, Any]:
-    """Return the result of a citation check, with the URI of each cited chunk."""
-    return {
-        "valid": check.valid,
-        "problem": check.problem.value if check.problem is not None else None,
-        "answer": check.answer,
-        "citations": [
-            {"label": c.label, "chunk_id": c.chunk_id, "uri": uris.get(c.chunk_id, "")} for c in check.citations
-        ],
-        "unknown_labels": list(check.unknown_labels),
-        "missing_chunks": list(check.missing_chunks),
     }

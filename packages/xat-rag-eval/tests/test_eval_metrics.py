@@ -5,7 +5,16 @@ from pathlib import Path
 import pytest
 from xat_rag_core.errors import ConfigError
 from xat_rag_core.model import Candidate, Chunk, LineSpan, SourceKind, StageScores
-from xat_rag_eval.harness import KindReport, Report, gate, load_golden, stage_order
+from xat_rag_eval.harness import (
+    MAX_MRR_DROP_BP,
+    MAX_RECALL_DROP_BP,
+    STAGES,
+    KindReport,
+    Report,
+    gate,
+    load_golden,
+    stage_order,
+)
 from xat_rag_eval.metrics import ndcg_at, percentile, recall_at, reciprocal_rank
 
 
@@ -27,18 +36,65 @@ def test_percentile() -> None:
     assert percentile([], 0.5) == 0.0
 
 
-def _report(recall: float, violations: list[str] | None = None, kind: str = "jira") -> Report:
-    return Report({kind: KindReport(cases=1, recall={"reranked": recall}, pack_recall=1.0)}, violations or [], [], {})
+def _report(
+    recall: float,
+    violations: list[str] | None = None,
+    kind: str = "jira",
+    final_recall: dict[str, float] | None = None,
+    final_mrr: float = 0.8,
+    nondeterministic: list[str] | None = None,
+) -> Report:
+    item = KindReport(
+        cases=1,
+        recall={"reranked": recall},
+        final_recall={"3": 0.8, "5": 0.9, "10": 1.0} if final_recall is None else final_recall,
+        final_mrr=final_mrr,
+        source_coverage=1.0,
+    )
+    return Report({kind: item}, violations or [], nondeterministic or [], {})
 
 
-BASELINE = {"kinds": {"jira": {"recall": {"reranked": 0.90}, "pack_recall": 1.0}}}
+BASELINE = {
+    "kinds": {"jira": {"recall": {"reranked": 0.90}, "final_recall": {"3": 0.8, "5": 0.9, "10": 1.0}, "final_mrr": 0.8}}
+}
 
 
 def test_gate_blocks_a_drop_of_more_than_two_points() -> None:
     assert gate(_report(0.885), BASELINE) == []
     assert gate(_report(0.88), BASELINE) == []  # Exactly 2 points is allowed.
     assert gate(_report(0.87), BASELINE) == ["the recall@10 of 'jira' dropped from 0.9000 to 0.8700"]
-    assert gate(_report(1.0, ["c1"]), BASELINE) == ["budget rule failed for case c1"]
+    assert gate(_report(1.0, ["c1"]), BASELINE) == ["an invariant failed for case c1"]
+    assert gate(_report(1.0, nondeterministic=["c2"]), BASELINE) == ["the result of case c2 changed between two runs"]
+
+
+def test_gate_blocks_a_drop_of_the_final_recall_at_5_and_at_10() -> None:
+    assert gate(_report(0.9, final_recall={"3": 0.8, "5": 0.88, "10": 0.98}), BASELINE) == []
+    assert gate(_report(0.9, final_recall={"3": 0.8, "5": 0.87, "10": 1.0}), BASELINE) == [
+        "the final recall@5 of 'jira' dropped from 0.9000 to 0.8700"
+    ]
+    assert gate(_report(0.9, final_recall={"3": 0.8, "5": 0.9, "10": 0.97}), BASELINE) == [
+        "the final recall@10 of 'jira' dropped from 1.0000 to 0.9700"
+    ]
+    both = gate(_report(0.9, final_recall={"3": 0.8, "5": 0.5, "10": 0.5}), BASELINE)
+    assert [problem.split(" of ")[0] for problem in both] == ["the final recall@5", "the final recall@10"]
+
+
+def test_the_final_recall_at_3_does_not_fail_the_gate() -> None:
+    assert gate(_report(0.9, final_recall={"3": 0.0, "5": 0.9, "10": 1.0}), BASELINE) == []
+
+
+def test_gate_allows_a_drop_of_the_final_mrr_of_up_to_ten_points() -> None:
+    assert MAX_MRR_DROP_BP == 1_000
+    assert gate(_report(0.9, final_mrr=0.75), BASELINE) == []
+    assert gate(_report(0.9, final_mrr=0.70), BASELINE) == []  # Exactly 10 points is allowed.
+    assert gate(_report(0.9, final_mrr=0.6999), BASELINE) == ["the final MRR of 'jira' dropped from 0.8000 to 0.6999"]
+    assert gate(_report(0.9, final_mrr=0.0), BASELINE) == ["the final MRR of 'jira' dropped from 0.8000 to 0.0000"]
+    assert gate(_report(0.9, final_mrr=1.0), BASELINE) == []
+
+
+def test_the_recall_limit_is_two_points_and_the_mrr_limit_is_ten() -> None:
+    assert MAX_RECALL_DROP_BP == 200
+    assert MAX_MRR_DROP_BP == 5 * MAX_RECALL_DROP_BP
 
 
 def test_gate_fails_closed() -> None:
@@ -47,8 +103,30 @@ def test_gate_fails_closed() -> None:
         "the kind 'docs' is not in the baseline",
         "the kind 'jira' is missing from this run",
     ]
-    broken = {"kinds": {"jira": {"recall": "x", "pack_recall": 1.0}}}
+    broken = {"kinds": {"jira": {**BASELINE["kinds"]["jira"], "recall": "x"}}}
     assert gate(_report(1.0), broken) == ["the recall@10 of 'jira' is missing from the baseline or the run"]
+
+
+@pytest.mark.parametrize(("missing", "name"), [("final_mrr", "final MRR"), ("final_recall", "final recall@5")])
+def test_gate_fails_when_the_baseline_has_no_final_metric(missing: str, name: str) -> None:
+    entry = {key: value for key, value in BASELINE["kinds"]["jira"].items() if key != missing}
+    problems = gate(_report(0.9), {"kinds": {"jira": entry}})
+    assert f"the {name} of 'jira' is missing from the baseline or the run" in problems
+
+
+def test_gate_fails_for_an_old_baseline_with_pack_recall_only() -> None:
+    old = {"kinds": {"jira": {"recall": {"reranked": 0.9}, "pack_recall": 1.0}}}
+    problems = gate(_report(0.9), old)
+    assert "the final MRR of 'jira' is missing from the baseline or the run" in problems
+    assert "the final recall@10 of 'jira' is missing from the baseline or the run" in problems
+
+
+def test_gate_fails_when_this_run_has_no_final_recall() -> None:
+    problems = gate(_report(0.9, final_recall={}), BASELINE)
+    assert problems == [
+        "the final recall@5 of 'jira' is missing from the baseline or the run",
+        "the final recall@10 of 'jira' is missing from the baseline or the run",
+    ]
 
 
 def test_golden_set_validation(tmp_path: Path) -> None:
@@ -59,6 +137,11 @@ def test_golden_set_validation(tmp_path: Path) -> None:
         {**good, "relevant": [{"doc_id": "d", "chunk_id": "c"}]},
         {**good, "relevant": [{"doc_id": "d"}, {"chunk_id": "c"}]},
         {**good, "question": ""},
+        {**good, "question": "   "},
+        {**good, "question": "", "log_lines": ["ERROR x"]},
+        {**good, "log_lines": ["ERROR x"]},
+        {**good, "unknown": 1},
+        {key: value for key, value in good.items() if key != "question"},
     ]
     for case in cases:
         path = tmp_path / "g.jsonl"
@@ -86,3 +169,7 @@ def test_stage_order() -> None:
     assert [c.chunk_id for c in stage_order(candidates, "lexical")] == ["c", "b"]
     assert [c.chunk_id for c in stage_order(candidates, "fused")] == ["a", "c", "b"]
     assert [c.chunk_id for c in stage_order(candidates, "reranked")] == ["b", "a", "c"]
+
+
+def test_the_stages_have_no_exact_stage() -> None:
+    assert STAGES == ("lexical", "dense", "fused", "reranked")

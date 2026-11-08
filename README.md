@@ -7,18 +7,18 @@
 
 # xat-rag
 
-A RAG builder for desktop apps that use small local models. It selects the smallest set of text that answers a question, and fits it into a small context window.
+A RAG builder for desktop apps. It finds the most relevant text for a question and returns it ranked, as structured data, for any LLM.
 
 > [!NOTE]
 >
-> xat-rag v0.1 is implemented. It has a Python library and a loopback HTTP service. Read the [API reference](docs/api.md) and the [architecture](docs/architecture.md).
+> xat-rag v0.1 is implemented. It has a Python library and a loopback HTTP service. Read the [API reference](docs/api.md), the [architecture](docs/architecture.md) and the [app guide](docs/app-guide.md).
 
 ## Who it is for
 
 xat-rag is for developers of desktop apps who want these things:
 
-- Answers from their own docs, tickets, code changes and prompts, with a small offline model.
-- A context that fits a window of 8192 tokens, with an exact token budget.
+- Retrieved text from their own docs, tickets, code changes and prompt files, for any LLM, offline or frontier.
+- Results that the app can check, cite and show, with a link to each source.
 - No network access except on loopback, no telemetry and no downloads at runtime.
 
 ## How it works
@@ -30,23 +30,24 @@ xat-rag is for developers of desktop apps who want these things:
    - Prompt files.
    - PDF, DOCX and HTML.
 2. xat-rag splits each document by its structure and indexes it for keyword search and for vector search.
-3. The app asks for a context with a question or with log lines.
-4. xat-rag searches each RAG, merges and reranks the results, and packs the best chunks into the budget.
-5. xat-rag returns a **context pack**: the chat messages, the chunks with labels, and a grammar for an answer with citations.
-6. The app sends the messages to its generator. Then it asks xat-rag to check the citations in the answer.
+3. The app asks a question in a named context. A context is a group of RAGs.
+4. xat-rag searches each RAG, merges the results and reranks them.
+5. xat-rag returns the best chunks in rank order. Each chunk has its text, its header, its source and its metadata.
+6. The app counts the tokens, fits the chunks to its LLM, builds the prompt, escapes the text and checks the citations.
 
 ## Why use it
 
-- **It is made for small windows.** It uses hybrid search, reranking, quotas for each source and an exact token count. It never sends more text than the budget allows.
-- **It understands technical text.** Error codes, file paths, JIRA keys and commit SHAs match exactly. Log lines become a clean query.
+- **It returns structured results.** Each chunk has a stable ID, its text and a source with a link to the origin. The app decides how to use them.
+- **It finds exact terms.** Error codes, file paths, JIRA keys and commit SHAs are found by keyword search with code-aware tokens. Vector search finds text that uses other words.
 - **It works offline.** The embedder and the reranker are small, locked models that run on the CPU.
-- **It is flexible.** TOML recipes describe each RAG and each context, so an app makes new RAG setups without code.
+- **It is flexible.** TOML recipes describe each RAG and each context, so an app makes new setups without code.
+- **It does not depend on an LLM.** The app can change its LLM. No index rebuild or recipe change is needed.
 - **It uses LangChain interfaces.** The retrievers, the embedder and the reranker implement LangChain interfaces. In service mode, xat-rag turns LangSmith tracing off for the whole process. In library mode, it turns tracing off only for its own calls.
 - **It fails in a predictable way.** Each kind of failure has one error type, and xat-rag never retries.
 
 ## What it is not
 
-- It does not generate text. The app calls its generator itself.
+- It does not call an LLM. It does not write answers, build prompts or fit text to a token limit. The app does these tasks.
 - It does not connect to JIRA, GitHub or other network services. The app sends the documents.
 - It does not offer an embeddings API for other programs.
 - It is not a server for a team. It accepts requests only from programs on the same machine.
@@ -68,17 +69,18 @@ rag = XatRag.open(
         recipes_folder=Path("recipes"),  # rags/*.toml and contexts/*.toml
         models_folder=Path("models"),
         lock_file=Path("build/models.lock.json"),
-        prompts_folder=Path("prompts"),  # <name>@<version>.md, read only
     )
 )
 rag.ingest([RawDocument("jira:PROJ-123.json", "jira", SourceKind.JIRA, issue_json_bytes)])
 rag.checkpoint("jira")
-pack = rag.compose(ContextRequest("log-triage", log_lines=tuple(lines)))
-# Send pack.messages, pack.grammar and pack.max_tokens to your generator. xat-rag never calls a model.
-check = rag.check_citations(answer_text, {c.label: c.chunk_id for c in pack.chunks})
+result = rag.retrieve(ContextRequest("ask-jira", "Why does the refund fail?", chunks=5))
+for chunk in result.chunks:
+    print(chunk.chunk_id, chunk.source.uri, chunk.text)
 ```
 
 The library does not change the process. It turns tracing off only for its own calls.
+
+Before the text goes to an LLM, count its tokens with the tokenizer of that LLM. See the [app guide](docs/app-guide.md).
 
 ### Service
 
@@ -99,18 +101,20 @@ The ready file holds the URL of the service. Each request, except `GET /health/l
 ```bash
 curl -s -X POST "$URL/v1/context" -H "Authorization: Bearer $KEY" \
   -H "Content-Type: application/json" \
-  -d '{"context": "log-triage", "log_lines": ["ERROR OrderNotFoundException: order 9f1c"]}'
+  -d '{"context": "ask-docs", "question": "Which port does the orders service use?", "chunks": 5}'
 ```
 
-The [API reference](docs/api.md) lists all routes, bodies, responses and settings.
+The response has `chunks` in rank order, the `omitted` chunks and `debug`. The [API reference](docs/api.md) lists all routes, bodies, responses and settings.
 
 ## Documentation
 
 | Page | What it covers |
 |---|---|
-| [Architecture](docs/architecture.md) | Packages, data model, flows, budget model, context pack, recipes, errors and open items. |
+| [Architecture](docs/architecture.md) | Packages, data model, ingestion and retrieval flows, the result, recipes, errors and open items. |
 | [API reference](docs/api.md) | The HTTP routes, the request and response bodies, the errors and the settings. |
+| [App guide](docs/app-guide.md) | The work of the app: tokens, prompts, escaping, citations and the question. |
 | [Development](docs/development.md) | Setup, build, test, tools, the retrieval gate, packaging and CI. |
+| [Changelog](CHANGELOG.md) | The changes between versions, with the upgrade steps. |
 
 ## Development
 

@@ -18,7 +18,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(prog="xat-rag-eval")
     commands = parser.add_subparsers(dest="command", required=True)
     command = commands.add_parser("run", help="Run a golden set.")
-    command.add_argument("--setup", type=Path, required=True, help="A folder with recipes/, prompts/ and documents/.")
+    command.add_argument("--setup", type=Path, required=True, help="A folder with recipes/ and documents/.")
     command.add_argument("--golden", type=Path, required=True)
     command.add_argument("--models", type=Path, default=Path("models"))
     command.add_argument("--lock", type=Path, default=Path("build/models.lock.json"))
@@ -36,7 +36,6 @@ def main() -> None:
         sys.exit("xat-rag-eval: give --baseline, also with --write-baseline.")
     if not args.write_baseline and not baseline_path.exists():
         sys.exit("xat-rag-eval: the baseline file does not exist. Write one with --write-baseline first.")
-    prompts = setup / "prompts"
     try:
         rag = XatRag.open(
             Settings(
@@ -44,7 +43,6 @@ def main() -> None:
                 recipes_folder=setup / "recipes",
                 models_folder=cast(Path, args.models),
                 lock_file=cast(Path, args.lock),
-                prompts_folder=prompts if prompts.is_dir() else None,
                 threads=1,
             )
         )
@@ -70,7 +68,7 @@ def _finish(report: Report, write_baseline: bool, baseline_path: Path) -> None:
     data = report_json(report)
     print(json.dumps(data, indent=2, sort_keys=True))
     if write_baseline:
-        problems = gate(report, {"kinds": data["kinds"]})  # Only the budget and determinism rules apply here.
+        problems = gate(report, {"kinds": data["kinds"]})  # Only the invariant and determinism rules apply here.
         if problems:
             sys.exit("xat-rag-eval: the run has problems, so it cannot be the baseline: " + "; ".join(problems))
         write_json(baseline_path, {"kinds": data["kinds"]})  # Timings change on each run, so they stay out.

@@ -1,18 +1,16 @@
-"""Load the locked models of xat-rag: the embedder, the rerankers and the generator tokenizer."""
+"""Load the locked models of xat-rag: the embedder, the rerankers and the size tokenizer."""
 
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
 
-from xat_rag_core.budget import GeneratorProfile
 from xat_rag_core.errors import ConfigError
 from xat_rag_core.ids import sha256_hex
 from xat_rag_onnx import OnnxEmbeddings, OnnxModel, load_lock, verify_model
 from xat_rag_onnx.embeddings import BGE_QUERY_PREFIX
 from xat_rag_onnx.locks import ModelLock
-from xat_rag_tokenizers import HfTokenCounter, profile
-from xat_rag_tokenizers.profiles import MINISTRAL_3_3B
+from xat_rag_tokenizers import HfTokenCounter
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,7 +25,7 @@ class EmbedderSpec:
 EMBEDDERS: Mapping[str, EmbedderSpec] = MappingProxyType({"bge-small-en-v1.5": EmbedderSpec(384, BGE_QUERY_PREFIX, "")})
 _ONNX_FILES = frozenset({"model.onnx", "tokenizer.json"})
 RERANKERS: frozenset[str] = frozenset({"ms-marco-minilm-l6-v2"})
-GENERATOR_TOKENIZERS: Mapping[str, str] = MappingProxyType({MINISTRAL_3_3B.name: "ministral-3-3b-tokenizer"})
+SIZE_TOKENIZER = "ministral-3-3b-tokenizer"
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,8 +35,7 @@ class LoadedModels:
     embedders: Mapping[str, OnnxEmbeddings]
     embedder_sha256: Mapping[str, str]
     rerankers: Mapping[str, OnnxModel]
-    counters: Mapping[str, HfTokenCounter]
-    profiles: Mapping[str, GeneratorProfile]
+    size_counter: HfTokenCounter
 
 
 def _lock_entry(locks: Mapping[str, ModelLock], name: str) -> ModelLock:
@@ -55,7 +52,6 @@ def load_models(
     *,
     embedders: set[str],
     rerankers: set[str],
-    generators: set[str],
     threads: int = 0,
 ) -> LoadedModels:
     """Check the locked files of the named models, and load them. Raise `ConfigError` on any problem."""
@@ -80,15 +76,9 @@ def load_models(
             raise ConfigError(f"The reranker '{name}' is not supported. v1 supports: {', '.join(sorted(RERANKERS))}.")
         verify_model(models_folder / name, _lock_entry(locks, name), cache_file, only=_ONNX_FILES)
         loaded_rerankers[name] = OnnxModel(models_folder / name, threads)
-    counters: dict[str, HfTokenCounter] = {}
-    profiles: dict[str, GeneratorProfile] = {}
-    for name in sorted(generators):
-        generator = profile(name)
-        folder = GENERATOR_TOKENIZERS[name]
-        entry = _lock_entry(locks, folder)
-        verify_model(models_folder / folder, entry, cache_file, only=frozenset({"tokenizer.json"}))
-        # The tokenizer ID comes from the lock, so a new tokenizer file changes the manifest.
-        tokenizer_id = f"{folder}@{entry.file('tokenizer.json').sha256[:12]}"
-        counters[name] = HfTokenCounter(models_folder / folder / "tokenizer.json", tokenizer_id)
-        profiles[name] = generator
-    return LoadedModels(loaded_embedders, sha, loaded_rerankers, counters, profiles)
+    entry = _lock_entry(locks, SIZE_TOKENIZER)
+    verify_model(models_folder / SIZE_TOKENIZER, entry, cache_file, only=frozenset({"tokenizer.json"}))
+    # The tokenizer ID comes from the lock, so a new tokenizer file changes the manifest.
+    tokenizer_id = f"{SIZE_TOKENIZER}@{entry.file('tokenizer.json').sha256[:12]}"
+    size_counter = HfTokenCounter(models_folder / SIZE_TOKENIZER / "tokenizer.json", tokenizer_id)
+    return LoadedModels(loaded_embedders, sha, loaded_rerankers, size_counter)

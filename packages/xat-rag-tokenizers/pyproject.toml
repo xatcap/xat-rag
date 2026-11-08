@@ -1,7 +1,7 @@
 [project]
 name = "xat-rag-tokenizers"
 version = "0.1.0"
-description = "Generator token counters and generator profiles of xat-rag."
+description = "The fixed size ruler of xat-rag."
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
