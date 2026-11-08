@@ -36,10 +36,4 @@ Apps of the organization can be written in Flutter, .NET or Python. A Python-onl
 
 ## Implementation notes (v0.1)
 
-- The routes are listed in the [API reference](../api.md). The settings are in the same page.
-- The access key has at least 16 ASCII characters. The service reads it once, and it removes the variable from the environment.
-- The settings use the `XatRag__` prefix. The names are not case-sensitive.
-- FastAPI serves the OpenAPI schema at `/openapi.json`. The build does not write a separate copy of it, so the rule of a published OpenAPI document is not met yet.
-- The service loads the recipes, the prompts, the models and the indexes before it listens. It has no loading state.
-- A second service with the same data folder stops with an error. The lock file is `xat-rag.lock` in the data folder.
-- Ingestion jobs live in memory. A restart of the service loses them.
+- The rule of a published OpenAPI document is not met yet. See the [open items](../architecture.md#16-later-versions-and-open-items).

@@ -6,7 +6,7 @@
 
 ## Context
 
-The window for retrieved chunks holds only about 10 to 18 chunks. Technical text has many exact identifiers, such as error codes, paths, JIRA keys and SHAs. Dense search does not match them well. Small models make query rewriting less reliable. See the [research](../research.md).
+The window for retrieved chunks holds only about 10 to 18 chunks. Technical text has many exact identifiers, such as error codes, paths, JIRA keys and SHAs. Dense search does not match them well. Small models make query rewriting less reliable.
 
 ## Decision
 
@@ -23,14 +23,6 @@ The window for retrieved chunks holds only about 10 to 18 chunks. Technical text
 ## Consequences
 
 - Exact identifiers and paraphrased text both find their chunks.
-- Reranking with MiniLM takes about 0.2 to 0.4 s on CPU for 40 candidates (an estimate). A context with three RAGs reranks about 120 candidates, so about 0.6 to 1.2 s. This is inside the NFR-7 target of 1.5 s. The evaluation harness measures the real value.
+- Reranking with MiniLM takes about 0.2 to 0.4 s on CPU for 40 candidates (an estimate). A context with three RAGs reranks about 120 candidates, so about 0.6 to 1.2 s. This is inside the [target](../architecture.md#13-evaluation) of 1.5 s. The real value must be measured at 100k chunks.
 - The pipeline makes no call to a generator, so it is fast and deterministic.
 - A question with vague words can retrieve less well without rewriting. We measure this with the golden sets before we add rewriting.
-
-## Implementation notes (v0.1)
-
-- The `[retrieval]` table of a RAG recipe sets the values. The defaults are 40 lexical, 40 dense and 20 exact candidates, RRF with k 60, 40 reranked candidates, `keep` 8 and an MMR lambda of 0.7.
-- Duplicates are removed by content hash, or by a cosine similarity of 0.95 or more.
-- The reranker keeps all of its candidates in score order. MMR then chooses the `keep` chunks.
-- The reranker is off when the recipe sets `reranker = "none"`. This is the default.
-- Query rewriting, HyDE and neighbor expansion are not in v0.1.

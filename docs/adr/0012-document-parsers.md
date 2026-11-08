@@ -52,15 +52,6 @@ LangChain community loaders (`PyPDFLoader`, `Docx2txtLoader` and others) take pa
 ## Implementation notes (v0.1)
 
 - `pdf-v1`: each parse calls `pypdf.apply_configuration`, so the settings hold only for that parse. The configuration limits the decompression output to 32 MiB, sets `jbig2dec_binary` to `None` and sets `disable_legacy_handling`. The parser version holds the pypdf version.
-- `docx-v2`: the parser reads the WordprocessingML elements directly.
-  - Tracked insertions are kept, and the result has the note `tracked_insertions_kept`.
-  - Deleted text (`w:del` and `w:moveFrom`) and field codes are dropped.
-  - Hidden runs are removed. A run is hidden with `w:vanish` or with a character style that hides text.
-  - A `w:gridSpan` is never expanded into cells. A value above 64 is a limit error.
-  - Comments, headers and footers are skipped, and the result has a note for each.
-- `html-v2`: the parser walks the tree once. `pre` keeps its line breaks, and `head` is not removed as a tag. The hidden styles are `display: none`, `visibility: hidden`, `opacity: 0` and `font-size: 0`.
 - `diff-v1`: the sanitizer runs after `unidiff` has parsed the text. A text with no file changes is invalid. A binary file is skipped with a note, and so is a file without hunks.
 - Text that is not a diff gives `parse_error` with the reason `invalid`.
-- A PDF page has a text layer when it has at least `min_page_chars` non-space characters.
-- The DOCX parser does not set the `lxml` options `resolve_entities=False` and `huge_tree=False`. The decision above is not met yet. This is an open item.
-- The HTML line spans use `Tag.sourceline`.
+- The DOCX parser does not set the `lxml` options `resolve_entities=False` and `huge_tree=False`. The decision above is not met yet. See the [open items](../architecture.md#16-later-versions-and-open-items).

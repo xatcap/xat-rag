@@ -24,16 +24,12 @@ The target is about 100k chunks for each laptop. At that size, brute-force vecto
 - One RAG can be rebuilt, deleted or backed up without an effect on the others.
 - A query that uses several RAGs opens several files and merges the results.
 - The index format is a SemVer contract. A change to it is a breaking change, unless the release ships a migration.
-- An upgrade of sqlite-vec can need a rebuild. The changelog tells when.
+- An upgrade of sqlite-vec can need a rebuild. The release notes tell when.
 - Above about 1M chunks, the store must change to an ANN index.
 - Software cannot remove all copies of deleted data (SSD wear leveling, journals, backups). To remove a whole RAG, delete its file.
 
 ## Implementation notes (v0.1)
 
-- The manifest is stored as JSON in the `meta` table, with the key `manifest`. The key `schema_version` holds `1`. A file with another schema version gives `index_mismatch_error`.
-- The manifest has no `created_at` or `updated_at` fields in v0.1.
-- Each reading connection sets `secure_delete`. At most 8 reading connections are open at a time. One writing connection works under a lock.
-- The FTS5 table uses the `secure-delete` option. The store needs SQLite 3.44 or later.
-- A checkpoint runs `PRAGMA wal_checkpoint(TRUNCATE)`. If readers block it, the store tries again for about 5 seconds. Then it raises an error.
+- The key `schema_version` in the `meta` table holds `1`. A file with another schema version gives `index_mismatch_error`.
 - The sqlite-vec table uses cosine distance.
-- The tests check that deleted lexical text is gone from the files. No test checks the shadow tables of sqlite-vec. That check is still open, so the decision above is not fully met yet.
+- The check of how sqlite-vec handles deleted vectors is not done yet. See the [open items](../architecture.md#16-later-versions-and-open-items).

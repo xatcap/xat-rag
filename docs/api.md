@@ -41,7 +41,7 @@ Each error has this body:
 | `service_unavailable_error` | 503 | The service is degraded, with no `Retry-After`. Restart the service. Or the RAG is being rebuilt or stopped, with `Retry-After: 1`. |
 | `overloaded_error` | 503 | The request pool is full (`Retry-After: 1`). Or the upload queue is full (`Retry-After: 5`). |
 | `stage_timeout_error` | 504 | A stage took longer than its limit. The message names the stage. |
-| `internal_error` | 500 | An unexpected failure. The body has no details. |
+| `internal_error` | 500 | An unexpected failure, or a failed stage such as the reranker. The body has no details. |
 
 A bad document in an upload does not give an HTTP error. It gives a `failed` result in the job. See [Jobs](#jobs).
 

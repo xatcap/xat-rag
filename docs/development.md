@@ -78,7 +78,7 @@ The stages are `lexical`, `dense`, `exact`, `fused` and `reranked`. The `reranke
 
 The gate fails closed. It fails on these problems:
 
-- A budget problem. A prompt must fit the window without the reserved output and without the safety margin.
+- A budget problem. A prompt must fit the window minus the reserved output and the safety margin.
 - A pack that changes between two runs.
 - A kind that is in only one of the report and the baseline.
 - A drop of more than 2 points (200 basis points) in the reranked recall@10 or in the pack recall of a kind. A drop of exactly 2 points passes.
@@ -99,7 +99,7 @@ After a reviewed change, write the file again:
 XATRAG_WRITE_BOUNDARIES=1 uv run pytest packages/xat-rag-eval/tests/test_chunk_boundaries.py
 ```
 
-Then note the rebuild in the changelog. The manifest makes the old indexes need a rebuild.
+Then add the rebuild to the release notes. The manifest makes the old indexes need a rebuild.
 
 ## Run the service from source
 
@@ -126,7 +126,7 @@ When the service is ready, the ready file holds its URL. Read the `url` field fr
 - `check-bundle` fails when a denied module is in the frozen folder. It checks the folder, the native libraries and the modules in the archive.
 - `smoke-test` starts the frozen executable with the fixture setup. It ingests `eval/fixtures/setup/documents/docs/orders.md` with the access key, waits for the job, and asks the `ask-docs` context for the port of the orders service. The test passes when the first chunk has the expected chunk ID. The service has 300 seconds to start. The stderr output goes to a file in the test folder. If the service does not start in time, the test stops it and fails.
 
-Measured on macOS arm64, the frozen folder has about 138 MB. The first start takes about 38 seconds, because macOS checks the unsigned binaries (Gatekeeper). Later starts take under 1 second. A context request for three RAGs takes about 115 ms at p95 on the fixture set.
+[ADR 0002](adr/0002-python.md#measured-v01) records the measured size and start times.
 
 The repository has no signing or notarization step yet. The first release task must add it, as [ADR 0002](adr/0002-python.md) states. The models are a separate release file. The lock file lists the license of each model.
 

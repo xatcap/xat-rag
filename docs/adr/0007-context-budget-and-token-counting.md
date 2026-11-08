@@ -34,7 +34,4 @@ A context pack that is too large makes the generator fail or cut the prompt. A p
 ## Implementation notes (v0.1)
 
 - The profile `ministral-3-3b` has `context_window` 8192, `template_overhead` 2 and `per_message_overhead` 3. These values were measured with `mistral-common` 1.13.1 on 2026-11-08. The BOS token costs 1 token, and each message wrapper costs 2 tokens. Each value adds 1 token of margin.
-- The tokenizer ID in the manifest is `ministral-3-3b-tokenizer@<first 12 hex digits of the sha256 of the locked tokenizer.json>`. It comes from the lock, not from the profile.
-- The counter does not add special tokens. It has `encode_special_tokens` on, so a text such as `[INST]` counts as ordinary text.
 - The renderer overhead counts the trust note, and each separator alone. A tokenizer can merge a run of separators, so each one is counted alone.
-- `tools/measure_profile.py --check` runs in the `check` job of CI.

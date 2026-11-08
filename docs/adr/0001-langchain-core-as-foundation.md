@@ -35,7 +35,7 @@ Rules:
 
 - xat-rag does not ship `langchain`, `langchain-community`, `langchain-classic` or `tiktoken`. An import-linter rule and a dependency allowlist enforce this.
 - The pipeline is plain Python, not LCEL. xat-rag never uses `with_retry` or `with_fallbacks`.
-- The public library API and the HTTP API use xat-rag types. `xat_rag.langchain` exposes the LangChain objects for LangChain users, and it follows the LangChain major version.
+- The public library API and the HTTP API use xat-rag types. A planned `xat_rag.langchain` module will expose the LangChain objects for LangChain users, and it will follow the LangChain major version.
 - The service and the frozen app use the exact versions above, from `uv.lock`. The library declares ranges (`langchain-core>=1.7.6,<2`, `langchain-text-splitters>=1.1.3,<2`), so that it can be installed next to a LangChain app.
 - Tracing is off for each xat-rag call, and in service mode for the whole process. See [ADR 0011](0011-offline-hardening.md).
 - Upgrades come in a monthly batch, and security fixes at once. Each upgrade must pass the evaluation gate, the determinism test, the offline tests, the allowlist and the chunk-boundary test. A new LangChain major version needs a new ADR.
@@ -78,10 +78,3 @@ Rules:
 - `Document.metadata` is an untyped dictionary. All reads and writes go through `lc_codec` functions. Pyright "unknown type" exceptions are allowed only there and in the retriever base classes, with the reason written down.
 - LangChain releases patches several times a week. Exact pins mean that we stay behind on purpose, and each upgrade costs a CI run.
 - A change in `RecursiveCharacterTextSplitter` can move chunk boundaries. The manifest records its version, so the change gives `index_mismatch_error` and a planned rebuild.
-
-## Implementation notes (v0.1)
-
-- The exact pins are in `uv.lock`. The library packages declare the version ranges.
-- The module `xat_rag.langchain` is not in v0.1. The retrievers, the embedder and the reranker are LangChain objects in their packages.
-- FastAPI needs `opentelemetry-api` (1.45.2 in `uv.lock`). xat-rag does not configure it. The package has no exporter and no SDK, so it sends nothing. It is on the dependency allowlist.
-- The chunker is a xat-rag class. It calls `RecursiveCharacterTextSplitter` only for sections that are too large.

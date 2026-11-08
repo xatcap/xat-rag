@@ -1,6 +1,6 @@
 # Architecture
 
-This page describes xat-rag v0.1, as the code implements it. The [research](research.md) gives the reasons for the techniques. The [ADRs](adr) record the decisions. The [API reference](api.md) lists the HTTP routes, and the [development guide](development.md) lists the build and test commands.
+This page describes xat-rag v0.1, as the code implements it. The [ADRs](adr) record the decisions and their reasons. The [API reference](api.md) lists the HTTP routes, and the [development guide](development.md) lists the build and test commands.
 
 ## 1. Goal and boundaries
 
@@ -149,7 +149,7 @@ The `span` has one of three forms:
 
 A chunk has two size limits:
 
-- `max_chunk_tokens` in the source recipe counts **generator** tokens. The default is 350, and the range is 32 to 2000. The packer uses this count.
+- `max_chunk_tokens` in the source recipe counts **generator** tokens. The default is 350, and the range is 32 to 2000. The packer uses this count. The default keeps chunks small. In a typical 8192-token window, the prompts, the input and the answer leave about 3700 to 5700 tokens for chunks. That space holds about 10 to 16 chunks of 350 tokens. The `keep` value of each RAG can lower this count.
 - The header and the text must also fit the **embedder** input. The chunker allows at most 510 tokens, with the special tokens, out of the 512 that `bge-small-en-v1.5` accepts.
 
 When a section is too large, the chunker splits it again. It splits at paragraph, line and word boundaries first. A single token that is still too large is cut at a character position. The embedder never cuts a document text. It raises an error instead.
@@ -364,7 +364,7 @@ See [ADR 0007](adr/0007-context-budget-and-token-counting.md).
   The kept lines keep their log order. A frequent template shows its count, for example `[x12]`. If the best template alone is larger than the cap, xat-rag cuts its raw example at a character position. The pack reports `dropped_templates` and `truncated`.
 - **Each source has a quota.** Each RAG has `min_tokens`, a floor when it has hits, and `max_share`, the largest share of the budget. Tokens that a source does not use go back to the pool, in score order. If the budget is smaller than the sum of the floors, xat-rag lowers all floors in proportion. The pack then reports `floors_lowered`.
 - **The pack gives `max_tokens`**, which is equal to `reserved_output`. The app must send this value to the generator.
-- **Order in the prompt:**
+- **Order in the prompt.** Models use text in the middle of a long prompt less well, so the strongest chunks go at the two ends:
   1. The system message: the pinned prompts, then the trust note.
   2. The user message: the chunk blocks, the strongest first and the second strongest last.
   3. The user message: the input section and the question, at the end.
@@ -406,35 +406,18 @@ See [ADR 0008](adr/0008-context-pack-and-citations.md).
 
 ## 9. HTTP service
 
-See [ADR 0003](adr/0003-library-and-loopback-service.md). The service accepts only loopback connections. All routes are under `/v1`, except the health routes. [The API reference](api.md) lists the bodies, the responses and the errors.
-
-| Route | Purpose |
-|---|---|
-| `GET /health/live` | Live. It needs no access key. |
-| `GET /health/ready` | Ready, with the version and the RAGs that need a rebuild. Degraded after a `parse_timeout`. |
-| `GET /v1/rags` | The RAGs, their counts, and the names of the contexts. |
-| `GET /v1/rags/{rag}` | The counts and the manifest of one RAG. |
-| `PUT /v1/rags/{rag}/documents` | Start an ingestion job. The body is `multipart/form-data`. Returns 202 and a `job_id`. |
-| `GET /v1/jobs/{job_id}`, `DELETE /v1/jobs/{job_id}` | The progress and the results. `DELETE` cancels the job before its next document. |
-| `DELETE /v1/rags/{rag}/documents/{doc_id}` | Delete one document and its chunks. The `doc_id` is percent-encoded. |
-| `POST /v1/rags/{rag}/rebuild` | Delete the index of the RAG and make an empty one. The app sends the documents again. |
-| `POST /v1/rags/{rag}/search` | Ranked candidates with the scores of each stage. For debugging and evaluation. |
-| `POST /v1/context` | Make a context pack. This is the main route. |
-| `POST /v1/query/build` | Show the query that the builder makes from the input. |
-| `POST /v1/tokens/count` | Count tokens with a generator profile. |
-| `GET /v1/prompts/{name}/{version}` | Get a pinned prompt. Read only. |
-| `POST /v1/citations/validate` | Validate an answer against the chunks of a pack. |
+See [ADR 0003](adr/0003-library-and-loopback-service.md). The service accepts only loopback connections. All routes are under `/v1`, except the health routes. The [API reference](api.md) lists the routes, the bodies, the responses, the errors, the settings and the start order.
 
 RAG names and prompt names match `[a-z0-9][a-z0-9-]{0,63}`.
 
 ### Access control
 
-Loopback alone is not enough. Other programs and other users on the machine can connect to `127.0.0.1`, and a web page can try to reach it through the browser. Thus, the service has these rules:
+Loopback alone is not enough. Other programs and other users on the machine can connect to `127.0.0.1`, and a web page can try to reach it through the browser. The [API reference](api.md#access-and-the-request-checks) lists the checks. Each check has this purpose:
 
-- **An access key.** The app makes a random key of at least 16 ASCII characters at each start, and it gives the key in `XatRag__AccessKey`. Each request, except `GET /health/live`, must send `Authorization: Bearer <key>`. A wrong or missing key gets 401 `authentication_error`.
-- **A host check.** The `Host` header must name `127.0.0.1`, `localhost` or `[::1]`, with or without a port. The check ignores case. This stops DNS rebinding.
-- **No browser access.** The service sends no CORS headers. It refuses each request that has an `Origin` header.
-- **A Unix socket** on macOS and Linux, with `XatRag__Urls=http://unix:<path>`. The file permissions of the socket decide who can connect. The socket is `0600`. The `Host` check still applies, so a client sends a loopback host name.
+- **The access key** stops other programs on the machine. The app makes a new random key at each start.
+- **The `Host` check** stops DNS rebinding.
+- **The `Origin` check** and the absence of CORS headers stop web pages.
+- **A Unix socket** on macOS and Linux lets the file permissions decide who can connect. The socket is `0600`.
 
 ### Pinned prompts
 
@@ -444,14 +427,7 @@ Prompt files can also go into a RAG with the `prompt` source kind. Such prompts 
 
 ### Lifecycle
 
-The service has this lifecycle:
-
-- `XatRag__Urls=http://127.0.0.1:0` lets the system choose a free port.
-- The service loads the recipes, the models and the indexes before it accepts requests.
-- `XatRag__ReadyFile` holds `{url, pid, version}` when the service is ready. A stale file from an earlier run is deleted at start.
-- `XatRag__StopWhenInputCloses=true` stops the service when its standard input closes. `SIGINT` and `SIGTERM` also stop it, and the cleanup runs.
-- `XatRag__DataFolder` holds the indexes, the lock file `xat-rag.lock` and the model check cache. The folder has mode `0700`. A lock allows one service for each data folder.
-- `XatRag__QueueLimit` sets the number of requests that can wait for the worker pool.
+The [API reference](api.md#lifecycle) lists the start order. A stale ready file from an earlier run is deleted at start.
 
 A startup failure stops the service. A bad recipe, a bad model or a bad setting gives a message and exit code 2 or another non-zero code.
 
@@ -524,6 +500,13 @@ rerank = 2500
 pack = 300
 ```
 
+In a context recipe, `name`, `generator` and the sources are required. The other fields have these defaults:
+
+- The `[retrieval]` and `[limits]` values in the examples are the defaults.
+- `window` is 8192, `reserved_output` is 768 and `input_max_tokens` is 1200.
+- `query_builder` is `text-v1`, and `pinned` is empty.
+- For each context source, `min_tokens` is 0 and `max_share` is 1.0. The quotas in the example are not defaults.
+
 `order` and `citation` are also fields of the context. Each takes one value in v0.1: `edges` and `json-gbnf`.
 
 xat-rag refuses these recipes at startup, with a message that names the problem:
@@ -541,20 +524,7 @@ Apps make new RAG setups by writing recipes, not code. Service settings use envi
 
 ## 11. Errors
 
-See [ADR 0009](adr/0009-error-model.md). Each kind of failure has one error type and one status code. xat-rag never retries. There is no silent fallback. All errors use one body: `{"error": {"message", "type"}}`.
-
-| Error type | Status | Example |
-|---|---|---|
-| `invalid_request_error` | 400, 413 | A bad body or field, a bad upload, a body that is too large, or a rebuild while a job runs. |
-| `authentication_error` | 401 | The access key is missing or wrong. |
-| `not_found_error` | 404 | An unknown RAG, document, job, context, prompt or route. |
-| `index_mismatch_error` | 409 | The manifest does not match the models, chunkers or recipe. Rebuild the RAG. |
-| `context_too_large_error` | 422 | The pinned items and the input do not fit in the window. |
-| `service_unavailable_error` | 503 | The service is degraded after a `parse_timeout` (no `Retry-After`, the app must restart the service). Or a RAG is being rebuilt or stopped (`Retry-After: 1`). |
-| `overloaded_error` | 503 | The request pool or the upload queue is full. Has `Retry-After`. |
-| `stage_timeout_error` | 504 | A stage took longer than its limit. The message names the stage. |
-| `parse_error` | In the result of one document | One document did not parse. The `reason` is one of `invalid`, `encrypted`, `no_text_layer`, `unsupported_media_type`, `too_large`, `limit_exceeded` or `parse_timeout`. |
-| `internal_error` | 500 | An unexpected failure, or a failed stage such as the reranker. The response has no details. |
+See [ADR 0009](adr/0009-error-model.md). Each kind of failure has one error type and one status code. xat-rag never retries. There is no silent fallback. The [API reference](api.md#errors) lists the error types and their status codes.
 
 Error messages never repeat input values. xat-rag replaces the default validation messages of pydantic and FastAPI. Each validation message names the fields that failed, and never the input value.
 
@@ -581,26 +551,15 @@ See [ADR 0004](adr/0004-onnx-runtime-and-locked-models.md).
 
 ## 13. Evaluation
 
-The `xat-rag-eval` package does these tasks:
+`xat-rag-eval` measures retrieval quality on golden sets, and its gate blocks a change when the quality drops past a fixed limit. It calls no generator, so it uses no judge model. The [development guide](development.md#retrieval-gate) gives the rules of the gate and the commands. The [package README](../packages/xat-rag-eval/README.md) gives the golden-set format and the report.
 
-- It reads golden sets in JSONL. Each line is one case. The fields are `id`, `context`, `rag`, `kind`, `question`, `log_lines` and `relevant`. Unknown fields are errors. A case needs a question or log lines, and at least one relevant item. Each item has exactly one of `chunk_id` or `doc_id`, and a `grade` from 1 to 3. A case scores chunks or documents, not both. Case IDs are unique.
-- Each case measures only the candidates of its `rag`. Ranks and RRF scores are per RAG.
-- It reports recall@10, nDCG@10 and MRR after each stage: lexical, dense, exact, fused and reranked. The reranked stage is the order that the packer gets, after the reranker, the duplicate removal and MMR.
-- It reports **pack recall**: the share of relevant chunks inside the final pack.
-- It checks two rules: the prompt never exceeds the window minus the reserved output and the safety margin, when the rendered messages are counted again, and the same input gives the same pack.
-- It reports p50 and p95 times for the retrieval and for the context composition.
-- It fails closed. The baseline file is required, unless the run writes it. The `--data` folder must be new or empty. A kind that is in only one of the report and the baseline fails. The reranked recall@10 and the pack recall of each kind are gated. A drop of more than 2 points (200 basis points) fails. A drop of exactly 2 points passes.
-- `--write-baseline` refuses to write when the budget or determinism problems exist. It writes only the kinds, without the timings.
+The fixture set in `eval/fixtures` has no PDF, DOCX or HTML golden cases yet. Ablation runs (no lexical search, no dense search, no reranker) are manual in v1.
 
-The CLI is `xat-rag-eval run --setup <folder> --golden <file> --data <new or empty folder> --baseline <file>`.
+The targets for v1 apply to a machine with a 4-core x64 or Apple Silicon CPU, 8 GB of RAM and no GPU. The generator is loaded on that machine. The fixture set is too small to measure the targets:
 
-The fixture set in `eval/fixtures` has three RAGs (docs, JIRA and diffs) and a corpus of Markdown, JIRA JSON and unified diffs. It has no PDF, DOCX or HTML golden cases yet.
-
-A **chunk-boundary test** (`packages/xat-rag-eval/tests/test_chunk_boundaries.py`) compares the chunk IDs, spans and content hashes of the fixture corpus with `eval/chunk_boundaries.json`. An upgrade of `langchain-text-splitters` or of a parser library that moves a boundary fails this test. After a reviewed change, the file is written again with `XATRAG_WRITE_BOUNDARIES=1`. The release notes must then say that a rebuild is needed.
-
-Known limit: one `eval/baseline.json` is shared by the three operating systems. The int8 ONNX numerics can differ a little by CPU and by batch. A per-system baseline can be needed later.
-
-Ablation runs (no lexical search, no dense search, no reranker) are manual in v1. The harness calls no generator, so it uses no judge model.
+- `POST /v1/context` at 100k chunks: p95 of at most 300 ms without the reranker, and at most 1.5 s with the reranker for a context with 3 RAGs.
+- Memory: at most 500 MB of extra RAM for the whole service at 100k chunks.
+- Ingestion: at least 1000 chunks per minute.
 
 ## 14. Privacy and untrusted content
 
@@ -608,19 +567,11 @@ See [ADR 0010](adr/0010-untrusted-content-privacy-and-ingestion.md) and [ADR 001
 
 ### Offline hardening
 
-`langchain-core` ships the `langsmith` client. A test showed that `LANGSMITH_TRACING=true` in the environment makes one retriever call send data to `api.smith.langchain.com`. Inside `tracing_context(enabled=False)`, the same call sent nothing. [ADR 0011](adr/0011-offline-hardening.md) gives the full rules. In short:
+`langchain-core` ships the `langsmith` client, and tracing can send text to a remote server. [ADR 0011](adr/0011-offline-hardening.md) gives the full rules. In short:
 
-1. **Service mode.** A PyInstaller runtime hook calls `harden_environment` before `main`. It deletes all `LANGSMITH_*` and `LANGCHAIN_*` variables, and it sets the tracing variables to `false`. It sets the Hugging Face offline variables and `HF_HOME` in the data folder. It removes variables that end in `_API_KEY`, `_TOKEN`, `_ENDPOINT` or `_ENDPOINTS`, except `XatRag__*` names. It keeps `XatRag__AccessKey` for `main`. The service entry point then calls `xat_rag_offline.harden_process()` first. That call reads the access key once, removes it from the environment, and installs the network guard. A second `XatRag__AccessKey` variable that differs only in case is refused.
-2. **Service mode.** After the imports, the service calls `langsmith.configure(enabled=False)`, and it turns off LangChain debug and verbose output.
-3. **Both modes.** Each use case turns tracing off inside its worker thread, for its own calls. In library mode, this is the only protection. xat-rag does not change the process of the host app.
-4. **Service mode.** An audit hook refuses these events:
-   - Network events (`socket.connect`, `socket.bind`, `socket.sendto`, `socket.sendmsg`, the name lookups and `socket.getnameinfo`) for any address that is not loopback. A send with no address is allowed.
-   - Process events (`subprocess.Popen`, `os.system`, `os.exec*`, `os.spawn*`, `os.posix_spawn`, `os.fork` and `os.forkpty`). These are always refused.
-   - `ctypes.dlopen`. The service allows no library.
-   - `sqlite3.load_extension`, except the locked sqlite-vec file.
-
-   The hook is defense in depth only. Native code can pass it.
-5. **CI.** The `offline` job runs the service and library tests in a new network namespace (`sudo unshare --net`), and it brings the loopback interface up. Any other connection fails. The job sets `LANGSMITH_TRACING`, `LANGSMITH_API_KEY` and `LANGSMITH_RUNS_ENDPOINTS`. The job uses no packet capture yet.
+- **Service mode.** Before any LangChain import, the service removes the tracing variables and the variables that can hold secrets. An audit hook then refuses process starts, unknown native libraries and network events outside loopback. The hook is defense in depth only, because native code can pass it.
+- **Both modes.** Each use case turns tracing off inside its worker thread. In library mode, this is the only protection, because xat-rag does not change the process of the host app.
+- **CI.** The `offline` job runs the service and library tests in a network namespace with only loopback.
 
 The service depends on `opentelemetry-api`, because FastAPI requires it. xat-rag does not configure it. It has no exporter and no SDK, so it sends nothing. The package is on the dependency allowlist.
 
@@ -640,7 +591,7 @@ The service depends on `opentelemetry-api`, because FastAPI requires it. xat-rag
   - It sets `PRAGMA secure_delete = ON` on each connection that it opens.
   - It turns on the FTS5 `secure-delete` option of the lexical index.
   - It runs `PRAGMA wal_checkpoint(TRUNCATE)` after a delete. If readers block the checkpoint, it tries again for about 5 seconds, and then it raises an error.
-- The tests check that deleted lexical text is gone from the files. They do not check the shadow tables of sqlite-vec yet. Vectors can leak text, so this check is an open item (section 18).
+- The tests check that deleted lexical text is gone from the files. They do not check the shadow tables of sqlite-vec yet. Vectors can leak text, so this check is an open item (section 16).
 - Software cannot remove all copies. SSD wear leveling, file system journals, backups and snapshots can keep old data. To remove a whole RAG, delete its file. The docs of the app must tell this to its users.
 
 ### Personal data
@@ -666,51 +617,7 @@ v1 has no plugin loading. A change to one of these parts needs a change to the c
 - **LangChain users.** A `xat_rag.langchain` module is planned. v0.1 does not have it. The retrievers, the embedder and the reranker are LangChain objects in the packages, and an app can import them.
 - **A new render template.** The renderer has a version constant, `render-v1`. The constant is not in the manifest. A change to the template changes the budget text, so the change needs a test and a release note.
 
-## 16. Requirement map
-
-| Requirement | Where |
-|---|---|
-| FR-1, FR-2, FR-3 | Sections 4 and 5, `xat-rag-parsers`, `xat-rag-documents`, [ADR 0012](adr/0012-document-parsers.md) |
-| FR-4, FR-5 | Sections 4 and 5 |
-| FR-6, FR-7, FR-8, FR-9 | Section 6, [ADR 0006](adr/0006-hybrid-retrieval-and-reranking.md) |
-| FR-10 | v1.1, the planned `Pruner` port |
-| FR-11 | Section 7 |
-| FR-12 | Section 6, LogQueryBuilder |
-| FR-13, FR-14 | Section 8 |
-| FR-15 | Section 13 |
-| FR-16 | Section 4, index manifest |
-| NFR-1, NFR-2, NFR-3, NFR-11 | Sections 12 and 14, [ADR 0011](adr/0011-offline-hardening.md) |
-| NFR-4 | Section 9 |
-| NFR-5 | Section 11 |
-| NFR-6 | [ADR 0005](adr/0005-sqlite-store-and-index-manifest.md) |
-| NFR-7, NFR-8, NFR-9, NFR-14, NFR-15 | Section 13 measures them on the hardware floor. |
-| NFR-10 | Section 5 |
-| NFR-12 | [ADR 0002](adr/0002-python.md) |
-| NFR-13 | [Writing style](writing-style.md) |
-| Defaults | Section 17 |
-
-## 17. Defaults
-
-The maintainer decided these v1 defaults on 2026-11-07. A recipe can change the recipe values. The service settings can change the limits.
-
-| Area | Default |
-|---|---|
-| Budget | 768 tokens for the answer, at most 1200 tokens for the input section, a 3% safety margin |
-| Quotas in `log-triage` (example recipe) | docs: 500 tokens and 40%. jira: 400 tokens and 35%. diffs: 400 tokens and 35%. |
-| Retrieval | Top 40 lexical, top 40 dense and top 20 exact. RRF with k=60. Rerank 40 candidates. Keep 8 for each RAG. MMR lambda 0.7. |
-| Chunks | 350 generator tokens for each chunk, from 32 to 2000 |
-| Upload | 64 MiB and 256 documents for each request. 4 MiB for each text document, 8 MiB for each HTML document, 32 MiB for each PDF or DOCX document. 256 MiB of queued upload data for the service. |
-| Context request body | 1 MiB |
-| Log input | At most 2000 lines for each request, and 4096 characters for each line |
-| PDF | At most 2000 pages, `min_page_chars` = 20, 200k characters for each page, 20M for each document |
-| DOCX | At most 10k zip entries, 256 MiB uncompressed, 64 MiB for `word/document.xml`, a compression ratio of 100 |
-| HTML | At most 8 MiB and 500k `<` characters |
-| Parse deadline | 60 seconds for each document. A watchdog marks the service degraded after 420 seconds. |
-| Stage time limits | Query build 200 ms, retrieve 500 ms, embed 1000 ms, rerank 2500 ms, pack 300 ms |
-| Service | Two worker threads, a queue limit of 8 requests, and ONNX Runtime threads chosen by ONNX Runtime |
-| Upgrades | A monthly batch. Security fixes (for example pypdf) at once. |
-
-## 18. Later versions and open items
+## 16. Later versions and open items
 
 Later versions:
 
@@ -732,5 +639,7 @@ Open items in v0.1:
 - A test does not check that sqlite-vec overwrites deleted vectors. Section 14 gives the reason.
 - The CI `offline` job uses a network namespace. It does not use a packet capture.
 - The service has no setting for the parse deadline.
-- One `eval/baseline.json` is shared by the three operating systems. A per-system baseline can be needed, because int8 ONNX numerics can differ a little by CPU and batch (section 13).
+- The build does not write a separate OpenAPI document, so the rule of a published document in [ADR 0003](adr/0003-library-and-loopback-service.md) is not met yet.
+- The docs do not yet tell app developers how to add an outbound firewall rule, as [ADR 0011](adr/0011-offline-hardening.md) requires.
+- One `eval/baseline.json` is shared by the three operating systems. A per-system baseline can be needed, because int8 ONNX numerics can differ a little by CPU and batch. See the [development guide](development.md#retrieval-gate).
 - The frozen folder is checked for denied modules by `check-bundle`. The check runs only in the package job of CI.

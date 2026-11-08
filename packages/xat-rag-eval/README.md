@@ -30,8 +30,6 @@ A golden set is JSONL. Each line is one case. Unknown fields are errors:
 
 For each kind, the harness reports recall@10, nDCG@10 and MRR after each stage (lexical, dense, exact, fused and reranked), and the pack recall. The reranked stage is the order that the packer gets. The harness checks that each pack fits the window minus the reserved output and the safety margin, when it is counted again on the rendered messages. It also checks that the same input gives the same pack. It reports p50 and p95 times for the retrieval and for the composition.
 
-The gate fails closed. It fails on a budget or determinism problem, and on a kind that is in only one of the report and the baseline. It fails when the reranked recall@10 or the pack recall of a kind drops by more than 2 points (200 basis points) below the baseline (NFR-14). A drop of exactly 2 points passes.
+The [development guide](../../docs/development.md#retrieval-gate) gives the rules of the gate and of the chunk-boundary test.
 
-The chunk-boundary test is `tests/test_chunk_boundaries.py`. It compares the chunks of the fixture corpus with `eval/chunk_boundaries.json`. Write the file again with `XATRAG_WRITE_BOUNDARIES=1` only after a reviewed change.
-
-The golden sets of an app are owned by the team that owns the app. The fixture set in this repository only tests the harness.
+The golden sets of an app are owned by the team that owns the app. That team builds 50 to 100 cases for each source kind, from sanitized real data. The fixture set in this repository only tests the harness.

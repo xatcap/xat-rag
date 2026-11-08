@@ -1,9 +1,9 @@
-"""The chunk-boundary test (architecture, section 13).
+"""The chunk-boundary test (development guide, retrieval gate).
 
 It chunks the fixture corpus and compares the chunk IDs, spans and content hashes with a saved file.
 An upgrade of a parser library or of `langchain-text-splitters` that moves a boundary fails this test.
 Then check the change, write the file again with XATRAG_WRITE_BOUNDARIES=1, and note the rebuild in
-the changelog, because the manifest makes the old indexes need a rebuild.
+the release notes, because the manifest makes the old indexes need a rebuild.
 """
 
 import json

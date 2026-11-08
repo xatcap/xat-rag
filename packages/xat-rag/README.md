@@ -2,26 +2,7 @@
 
 The xat-rag library: recipes, the composition root, ingestion and context packs. See the [architecture](../../docs/architecture.md).
 
-```python
-from pathlib import Path
-from xat_rag import ContextRequest, Settings, XatRag
-from xat_rag_core.model import RawDocument, SourceKind
-
-rag = XatRag.open(
-    Settings(
-        data_folder=Path("data"),
-        recipes_folder=Path("recipes"),  # rags/*.toml and contexts/*.toml
-        models_folder=Path("models"),
-        lock_file=Path("build/models.lock.json"),
-        prompts_folder=Path("prompts"),  # <name>@<version>.md, read only
-    )
-)
-rag.ingest([RawDocument("jira:PROJ-123.json", "jira", SourceKind.JIRA, issue_json_bytes)])
-rag.checkpoint("jira")
-pack = rag.compose(ContextRequest("log-triage", log_lines=tuple(lines)))
-# Send pack.messages, pack.grammar and pack.max_tokens to your generator. xat-rag never calls a model.
-check = rag.check_citations(answer_text, {c.label: c.chunk_id for c in pack.chunks})
-```
+The [root README](../../README.md#library) has a quick start.
 
 The `XatRag` facade has these methods:
 

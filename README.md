@@ -11,7 +11,7 @@ A RAG builder for desktop apps that use small local models. It selects the small
 
 > [!NOTE]
 >
-> xat-rag v0.1 is implemented. It has a Python library and a loopback HTTP service. Read the [architecture](docs/architecture.md), the [API reference](docs/api.md) and the [ADRs](docs/adr).
+> xat-rag v0.1 is implemented. It has a Python library and a loopback HTTP service. Read the [API reference](docs/api.md) and the [architecture](docs/architecture.md).
 
 ## Who it is for
 
@@ -108,17 +108,14 @@ The [API reference](docs/api.md) lists all routes, bodies, responses and setting
 
 | Page | What it covers |
 |---|---|
-| [Research](docs/research.md) | Industry practices for RAG with small models, the draft requirements and the open questions. |
 | [Architecture](docs/architecture.md) | Packages, data model, flows, budget model, context pack, recipes, errors and open items. |
 | [API reference](docs/api.md) | The HTTP routes, the request and response bodies, the errors and the settings. |
 | [Development](docs/development.md) | Setup, build, test, tools, the retrieval gate, packaging and CI. |
-| [Architecture decisions](docs/adr) | The significant decisions and their reasons, including the choice of LangChain core as the foundation. |
-| [Writing style](docs/writing-style.md) | The writing rules for all text in this repository. |
 
 ## Development
 
 ```bash
-uv sync --frozen
+uv sync --locked
 uv run python tools/fetch_models.py
 uv run pytest
 uv run pyright

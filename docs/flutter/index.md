@@ -3,7 +3,7 @@
 - These pages describe how to write, structure, and review Dart and Flutter code.
 - For every architecture decision, confirm that the user understands and owns the whole architecture.
 - For every architecture decision, ALWAYS provide an explanation for the reasons of the decision and confirm with the user.
-- Significant decisions must be documented under an [ADR](./architecture-principles.md#architecture-decision-records-adrs).
+- Significant decisions must be documented under an [ADR](../dotnet/architecture-principles.md#architecture-decision-records-adrs).
 - Route the task to the below pages and read them before any code change.
 
 **Baseline:** Flutter 3.44 (stable) · Dart 3.12 · sound null safety · Material 3 · `flutter_bloc` for state management.

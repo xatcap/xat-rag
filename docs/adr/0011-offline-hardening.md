@@ -6,7 +6,7 @@
 
 ## Context
 
-xat-rag must work offline, with no telemetry and no downloads (NFR-1, NFR-2, NFR-3). `langchain-core` ships the `langsmith` client. LangSmith tracing is off by default, but it starts when one of these variables is the exact string `true`:
+xat-rag must work offline, with no telemetry and no downloads. `langchain-core` ships the `langsmith` client. LangSmith tracing is off by default, but it starts when one of these variables is the exact string `true`:
 
 - `LANGSMITH_TRACING`
 - `LANGSMITH_TRACING_V2`
@@ -82,7 +82,7 @@ Loopback means these addresses: Unix socket paths, `127.0.0.0/8`, `::1` (also wi
 - Ship only the packages of the exact `uv.lock`. A dependency allowlist that is equal to the lock fails CI when a new transitive package appears.
 - A denylist that fails CI: posthog, openai, tiktoken, nltk, torch, transformers, sentence-transformers, sentry-sdk, OpenTelemetry exporters, unstructured, SQLAlchemy, aiohttp, `cryptography`, `langchain-community`, `langchain-classic`, `langchain`.
 - PyInstaller `excludes` the same packages.
-- The license check of NFR-11.
+- A license check: all shipped models and libraries must allow redistribution in commercial desktop apps.
 
 ### 5. Tests in CI
 
@@ -102,15 +102,6 @@ Loopback means these addresses: Unix socket paths, `127.0.0.0/8`, `::1` (also wi
 
 ## Implementation notes (v0.1)
 
-- `harden_process(data_folder, allowed_libraries, allowed_extensions, on_block)` needs the data folder. It sets `HF_HOME` to `<data folder>/hf`.
-- `harden_environment` refuses two access key variables that differ only in case. It removes the access key from the environment, and it returns the key.
-- The audit hook refuses these events, unless the address is loopback:
-  - Socket connect, bind, send and name lookup events. A send with no address is allowed.
-  - Process events: `subprocess.Popen`, `os.system`, `os.exec*`, `os.spawn*`, `os.posix_spawn`, `os.fork` and `os.forkpty`. These are always refused.
-  - `ctypes.dlopen`. The service allows no library.
-  - `sqlite3.load_extension`, except the locked sqlite-vec file.
-- The PyInstaller runtime hook calls `harden_environment` before `main`, and it does not call `harden_process`. It keeps the access key in the environment. Then `main` calls `harden_process`, which reads and removes the key and installs the guard.
-- In library mode, `xat_rag_core.tracing.no_tracing()` clears `tracing_v2_callback_var` and `run_collector_var`. It enters `tracing_context(enabled=False, parent=False)`.
-- In service mode, the loggers of pypdf, python-docx, beautifulsoup4, uvicorn access, httpx, langsmith and onnxruntime are off.
-- The CI `offline` job runs the service and library tests in a new network namespace (`sudo unshare --net`), and it brings the loopback interface up. It sets `LANGSMITH_TRACING`, `LANGSMITH_API_KEY` and `LANGSMITH_RUNS_ENDPOINTS`. The job does not capture packets yet, so the packet capture of section 5 is not met yet.
-- `xat-rag-offline` imports no workspace package and no LangChain package. The import-linter contract checks this.
+- `harden_environment` refuses two access key variables that differ only in case.
+- The process events and `ctypes.dlopen` are always refused. The exception for loopback applies only to the socket events. The service allows no library.
+- The packet capture of section 5 and the firewall guidance of section 3 are not met yet. See the [open items](../architecture.md#16-later-versions-and-open-items).

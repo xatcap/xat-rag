@@ -15,7 +15,6 @@ This file is an index to the documentation in this repository.
 | Page | What it covers |
 |------|----------------|
 | [README.md](README.md) | The goal of xat-rag, who it is for, what it is not, and how an app uses it. |
-| [docs/research.md](docs/research.md) | Industry practices for RAG with small models and small context windows, the draft requirements and the open questions. |
 | [docs/architecture.md](docs/architecture.md) | Packages, ports, data model, ingestion and query flows, the budget model, the context pack, the HTTP service, recipes, errors, models, evaluation, privacy and the open items of v0.1. |
 | [docs/api.md](docs/api.md) | The HTTP routes of the service, with the request and response bodies, the errors, the upload format, the settings and the limits. |
 | [docs/development.md](docs/development.md) | Setup, the build, test and lint commands, the tools, the retrieval gate, packaging, the smoke test and the CI jobs. |
@@ -64,7 +63,7 @@ The workspace is one uv project. Each package has a README with its modules and 
 | `eval/` | The fixture set (recipes, prompts and documents), the golden set and the baseline of the retrieval gate. |
 | `.github/workflows/ci.yml` | The CI jobs: `check`, `offline` and `package`. |
 
-Build and test commands are in [docs/development.md](docs/development.md). The most used ones are `uv sync --frozen`, `uv run python tools/fetch_models.py`, `uv run pytest`, `uv run pyright` and `uv run lint-imports`.
+Build and test commands are in [docs/development.md](docs/development.md). The most used ones are `uv sync --locked`, `uv run python tools/fetch_models.py`, `uv run pytest`, `uv run pyright` and `uv run lint-imports`.
 
 ## Engineering guidelines
 
