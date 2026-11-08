@@ -4,7 +4,7 @@ Scale orchestration according to task complexity:
 
 - **Tier 1 — Trivial Changes (Typos, Docs, Single-Line Configs):**
     - Execute directly without spawning planning subagents.
-    - If documentation is modified, ensure compliance with [docs/writing-style.md](docs/writing-style.md).
+    - If documentation is modified, ensure compliance with [docs/writing-style/writing-style.md](docs/writing-style/writing-style.md).
 - **Tier 2 — Bug Fixes:**
     - Whenever given a stack trace or failing behavior, delegate root-cause investigation to `debugger` before editing code.
     - If the root cause is isolated to a single module and does not alter public contracts or architecture, apply the fix and proceed to validation.
