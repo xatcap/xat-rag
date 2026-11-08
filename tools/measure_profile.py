@@ -1,7 +1,7 @@
 """Measure the chat template overheads of the Ministral-3-3B profile, and check token counts.
 
 This is a dev tool. It uses `mistral-common` (Apache-2.0), Mistral's reference tokenizer, and the
-locked `tekken.json`. It needs no engine and no model weights (ADR 0007).
+locked `tekken.json`. It needs no generator and no model weights (ADR 0007).
 
     uv run python tools/measure_profile.py            # print the measured overheads
     uv run python tools/measure_profile.py --check    # check our counts against mistral-common (CI)

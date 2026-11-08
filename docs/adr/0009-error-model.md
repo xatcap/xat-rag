@@ -6,13 +6,13 @@
 
 ## Context
 
-Apps must show the right message for each failure. xat-llm-engine maps each kind of failure to one status code and one error type, and it never retries. xat-rag follows the same rules, so that an app handles both in the same way.
+Apps must show the right message for each failure. xat-rag maps each kind of failure to one status code and one error type, and it never retries.
 
 ## Decision
 
 - Each kind of failure has one error type and one HTTP status. The table is in [architecture, section 11](../architecture.md#11-errors).
-- Errors use the engine's body: `{"error": {"message", "type"}}`. Where the engine has a type with the same meaning (`invalid_request_error`, `not_found_error`, `service_unavailable_error`, `overloaded_error`, `internal_error`), xat-rag uses the same name.
-- xat-rag does not use the engine's `budget_exceeded_error`, because it has another meaning there. A context that does not fit is `context_too_large_error` (422).
+- Errors use one body: `{"error": {"message", "type"}}`. Common failures use `invalid_request_error`, `not_found_error`, `service_unavailable_error`, `overloaded_error` and `internal_error`.
+- A context that does not fit is `context_too_large_error` (422).
 - One mapping in the code converts the errors of the library to HTTP responses. The match covers all error types.
 - xat-rag never retries a stage.
 - Each stage of a context request has a time limit that the context recipe sets. Ingestion runs as a job that the caller can cancel. A stage that takes too long gives `stage_timeout_error` (504), and the message names the stage.
@@ -24,7 +24,7 @@ Apps must show the right message for each failure. xat-llm-engine maps each kind
 
 ## Consequences
 
-- Apps can use the same error body and most of the same error types for xat-rag and the engine.
+- Apps can use one error body for all failures of xat-rag.
 - A temporary failure reaches the caller, and the caller decides if it tries again.
 - Error messages follow the [writing style](../writing-style.md). They never hold document text or input values. xat-rag replaces the default validation messages of pydantic and FastAPI.
 

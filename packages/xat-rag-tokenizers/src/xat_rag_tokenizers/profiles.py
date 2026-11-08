@@ -12,7 +12,7 @@ MINISTRAL_3_3B = GeneratorProfile(
     tokenizer_id="ministral-3-3b-tokenizer@b35d4dfe",
     # Measured with tools/measure_profile.py and mistral-common 1.13.1 on 2026-11-08: BOS = 1 token,
     # [SYSTEM_PROMPT]...[/SYSTEM_PROMPT] and [INST]...[/INST] = 2 tokens each. Each value has 1 token of
-    # margin, because the GGUF chat template of the engine can differ a little.
+    # margin, because the GGUF chat template of the generator can differ a little.
     template_overhead=2,
     per_message_overhead=3,
     safety_margin_pct=3.0,

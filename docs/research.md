@@ -6,9 +6,9 @@ Numbers from vendors or papers are their own claims. We did not measure them aga
 
 ## 1. The main constraint: the token budget
 
-xat-llm-engine runs Ministral-3-3B Q4_K_M with a context of 8192 tokens by default (`LocalModel__ContextSize`). It runs one request at a time (`LocalModel__Parallel=1`). A larger `Parallel` value splits the context between requests.
+The target generator is Ministral-3-3B Q4_K_M with a context of 8192 tokens. It runs one request at a time. Parallel requests split the context between them.
 
-A typical split of the 8k window for the log-viewer:
+A typical split of the 8k window:
 
 | Part | Tokens |
 |---|---|
@@ -91,7 +91,7 @@ We found no independent CPU numbers for the 0.5B rerankers. We must measure them
 ## 9. Citations, grounding and untrusted text
 
 - **Give each chunk a stable ID** and a content hash.
-- **Ask the model for a structured answer** that cites the chunks. The engine supports `response_format` and GBNF `grammar` for the local model.
+- **Ask the model for a structured answer** that cites the chunks. A local model can use `response_format` and a GBNF `grammar`.
 - **Check the answer after generation.** Each cited ID must be in the prompt.
 - **Treat retrieved text as untrusted.** JIRA comments and diffs can hold prompt injections. Put the text inside delimiters, and tell the model that the text is data and not instructions.
 
@@ -121,7 +121,7 @@ We found no independent CPU numbers for the 0.5B rerankers. We must measure them
 | FAISS | Vectors only. Needs a separate lexical index. |
 | Tantivy | A strong BM25 engine in Rust, with a Python binding. |
 
-## 11. The log-viewer case
+## 11. Log lines as a query
 
 **The log lines are the query.** They are long and noisy, and most of their tokens do not help the search. A deterministic query builder does these steps:
 
@@ -176,7 +176,7 @@ These requirements are the input to the architecture. The [architecture](archite
 | NFR-1 | Offline. No network traffic except on loopback. Tested with the network blocked. |
 | NFR-2 | No downloads at runtime. Models are bundled files with sha256 locks. |
 | NFR-3 | No telemetry. At the default log level, logs hold no document text, queries or log lines. |
-| NFR-4 | The service accepts only loopback connections. It supports port 0, a ready file and a stop when its input closes, as the engine does. |
+| NFR-4 | The service accepts only loopback connections. It supports port 0, a ready file and a stop when its input closes. |
 | NFR-5 | One error type for each kind of failure. No retries. A time limit for each stage. |
 | NFR-6 | Semantic Versioning for the library API, the HTTP API, the index format and the recipe format. |
 | NFR-7 | Query time of `POST /v1/context`: p95 of at most 300 ms without the reranker, and at most 1.5 s with the reranker for a context with 3 RAGs. Measured at 100k chunks on the hardware floor. |
@@ -184,7 +184,7 @@ These requirements are the input to the architecture. The [architecture](archite
 | NFR-9 | Ingestion: at least 1000 chunks per minute on the CPU of the hardware floor, so a first sync of 100k chunks takes about 1.5 to 2 hours. Ingestion can stop and continue. |
 | NFR-10 | Index writes are atomic. A crash does not damage the index. |
 | NFR-11 | All shipped models and libraries allow redistribution in commercial desktop apps. A check lists them in the third-party notices. |
-| NFR-12 | Platforms: macOS arm64, Windows x64 and Linux x64, the same as the engine. |
+| NFR-12 | Platforms: macOS arm64, Windows x64 and Linux x64. |
 | NFR-13 | Documentation follows ASD-STE100. ADRs record the significant decisions. |
 | NFR-14 | The golden-set recall@10 of each source kind does not drop by more than 2 points (absolute) between minor versions. CI checks it, and a larger drop blocks the release. |
 | NFR-15 | Hardware floor: a 4-core x64 or Apple Silicon CPU, 8 GB of RAM and no GPU. All targets apply to this machine, with the generator loaded. |
@@ -209,6 +209,6 @@ These requirements are the input to the architecture. The [architecture](archite
 | Encryption at rest? | Decided: not in v1. A documented limit. See [ADR 0010](adr/0010-untrusted-content-privacy-and-ingestion.md). |
 | Author and assignee data? | Decided: metadata only, not in the chunk text. See [ADR 0010](adr/0010-untrusted-content-privacy-and-ingestion.md). |
 | Hardware floor and the numbers in NFR-7, NFR-8 and NFR-9? | Decided: see NFR-7, NFR-8, NFR-9 and NFR-15. |
-| Who owns the golden sets, and what threshold blocks a release? | Decided: the team that owns the log-viewer builds 50 to 100 cases for each source kind, from sanitized real data. A drop of more than 2 points of recall@10 blocks a release (NFR-14). |
-| Budget, quota, retrieval, upload, parser and time-limit defaults? | Decided: the values in the [architecture](architecture.md#18-defaults). |
+| Who owns the golden sets, and what threshold blocks a release? | Decided: the team that owns the app builds 50 to 100 cases for each source kind, from sanitized real data. A drop of more than 2 points of recall@10 blocks a release (NFR-14). |
+| Budget, quota, retrieval, upload, parser and time-limit defaults? | Decided: the values in the [architecture](architecture.md#17-defaults). |
 | Encryption at rest, invisible PDF text, OCR, names in free text? | Accepted as v1 limits. See the [architecture](architecture.md#14-privacy-and-untrusted-content). |

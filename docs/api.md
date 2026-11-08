@@ -202,7 +202,7 @@ The response is the context pack:
  "debug": null}
 ```
 
-Send `rendered.messages`, `citation.grammar` and `max_tokens` to the engine. Do not send `citation.json_schema` with the grammar.
+Send `rendered.messages`, `citation.grammar` and `max_tokens` to the generator. Do not send `citation.json_schema` with the grammar.
 
 The `span` has one of three forms. A line span has `type` `line`, `line_start` and `line_end`. A page span has `type` `page`, `page_start`, `page_end`, `label_start` and `label_end`. A block span has `type` `block`, `block_start` and `block_end`.
 
@@ -261,7 +261,7 @@ The response:
 
 `problem` is `null` when the answer is valid. Otherwise it is one of these values:
 
-- `not_json`: the answer is not valid JSON. An answer that the engine cut at `max_tokens` has this problem.
+- `not_json`: the answer is not valid JSON. An answer that the generator cut at `max_tokens` has this problem.
 - `bad_shape`: the JSON does not have a string `answer` and a list `citations` of strings.
 - `unknown_label`: a citation label is not in the `chunks` list. The list is in `unknown_labels`.
 - `missing_chunk`: a cited chunk no longer exists in any RAG. The IDs are in `missing_chunks`.

@@ -89,7 +89,7 @@ class CitationsBody(_Body):
 
 
 def error_response(error: XatRagError) -> JSONResponse:
-    """Return the engine-style error body for an error. An internal error has no details (ADR 0009)."""
+    """Return the error body for an error. An internal error has no details (ADR 0009)."""
     if error.error_type is ErrorType.INTERNAL:
         LOG.error("internal error: %s", type(error).__name__)
         return _plain_error(500, ErrorType.INTERNAL, _INTERNAL_MESSAGE)

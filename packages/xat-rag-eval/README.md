@@ -34,4 +34,4 @@ The gate fails closed. It fails on a budget or determinism problem, and on a kin
 
 The chunk-boundary test is `tests/test_chunk_boundaries.py`. It compares the chunks of the fixture corpus with `eval/chunk_boundaries.json`. Write the file again with `XATRAG_WRITE_BOUNDARIES=1` only after a reviewed change.
 
-The golden sets of the log-viewer are owned by the log-viewer team. The fixture set in this repository only tests the harness.
+The golden sets of an app are owned by the team that owns the app. The fixture set in this repository only tests the harness.

@@ -19,7 +19,7 @@ rag = XatRag.open(
 rag.ingest([RawDocument("jira:PROJ-123.json", "jira", SourceKind.JIRA, issue_json_bytes)])
 rag.checkpoint("jira")
 pack = rag.compose(ContextRequest("log-triage", log_lines=tuple(lines)))
-# Send pack.messages, pack.grammar and pack.max_tokens to xat-llm-engine. xat-rag never calls a model.
+# Send pack.messages, pack.grammar and pack.max_tokens to your generator. xat-rag never calls a model.
 check = rag.check_citations(answer_text, {c.label: c.chunk_id for c in pack.chunks})
 ```
 

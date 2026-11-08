@@ -11,7 +11,7 @@ xat-rag selects the smallest set of text that answers a question. It fits that t
 - It retrieves, reranks and packs chunks into a **context pack** for one request.
 - It validates the citations in the model's answer.
 
-xat-rag has **no integration with xat-llm-engine**. It never calls the engine or any other generator. The app sends the context pack to the engine itself. See [ADR 0008](adr/0008-context-pack-and-citations.md).
+xat-rag **never calls a generator**. The app sends the context pack to its generator itself. See [ADR 0008](adr/0008-context-pack-and-citations.md).
 
 | In scope (v1) | Out of scope (v1) |
 |---|---|
@@ -344,9 +344,9 @@ A request has at most 2000 log lines. `POST /v1/query/build` returns the query, 
 See [ADR 0007](adr/0007-context-budget-and-token-counting.md).
 
 - **The context recipe owns the window size and the split.** A request can lower the values, but not raise them. A request that sets a value above the recipe gets 400 `invalid_request_error`.
-- **The window must match the engine.** It must equal `LocalModel__ContextSize` divided by `LocalModel__Parallel` in xat-llm-engine. The docs of the app must keep the two values equal.
+- **The window must match the generator.** It must equal the context size that the generator has for one request. The app must keep the recipe window and the generator context size equal.
 - **A generator profile describes the model.** The profile has `context_window`, `tokenizer_id`, `template_overhead`, `per_message_overhead` and `safety_margin_pct` (3%). v1 has one profile, `ministral-3-3b`. Its values are `context_window` 8192, `template_overhead` 2 and `per_message_overhead` 3.
-- **The overheads are measured, not guessed.** `tools/measure_profile.py` encodes sample chats with `mistral-common` 1.13.1, Mistral's reference tokenizer and chat-template library. The tool needs no engine and no model weights.
+- **The overheads are measured, not guessed.** `tools/measure_profile.py` encodes sample chats with `mistral-common` 1.13.1, Mistral's reference tokenizer and chat-template library. The tool needs no generator and no model weights.
 - **The counter uses the locked tokenizer.** It counts text without the special tokens, but `encode_special_tokens` is on. A text such as `[INST]` in a document is counted as text.
 - **The budget for chunks** is:
 
@@ -363,7 +363,7 @@ See [ADR 0007](adr/0007-context-budget-and-token-counting.md).
 
   The kept lines keep their log order. A frequent template shows its count, for example `[x12]`. If the best template alone is larger than the cap, xat-rag cuts its raw example at a character position. The pack reports `dropped_templates` and `truncated`.
 - **Each source has a quota.** Each RAG has `min_tokens`, a floor when it has hits, and `max_share`, the largest share of the budget. Tokens that a source does not use go back to the pool, in score order. If the budget is smaller than the sum of the floors, xat-rag lowers all floors in proportion. The pack then reports `floors_lowered`.
-- **The pack gives `max_tokens`**, which is equal to `reserved_output`. The app must send this value to the engine.
+- **The pack gives `max_tokens`**, which is equal to `reserved_output`. The app must send this value to the generator.
 - **Order in the prompt:**
   1. The system message: the pinned prompts, then the trust note.
   2. The user message: the chunk blocks, the strongest first and the second strongest last.
@@ -392,7 +392,7 @@ See [ADR 0008](adr/0008-context-pack-and-citations.md).
 }
 ```
 
-- `rendered.messages` uses the OpenAI message format, which the local provider of the engine accepts.
+- `rendered.messages` uses the OpenAI message format.
 - Retrieved chunks and the input section are untrusted. They go only in the user message, inside `<chunk id="C1" kind="jira" trust="untrusted">...</chunk>` and `<input trust="untrusted">...</input>`.
   - xat-rag builds the attributes only from the label and the source kind, which it validates. Titles and URIs go inside the block, not into attributes.
   - Inside a block, xat-rag replaces `<` with `&lt;`. So no text can close or open a block.
@@ -400,7 +400,7 @@ See [ADR 0008](adr/0008-context-pack-and-citations.md).
 - The answer format is `{"answer": "...", "citations": ["C1", "C3"]}`. The GBNF grammar allows only the labels in the pack. The app sends `citation.grammar` to the local model. It sends `json_schema` only to a generator that does not accept a grammar, and never both.
 - The `uri` of a PDF chunk ends with `#page=N`, the standard PDF open parameter.
 - xat-rag stores no packs. `POST /v1/citations/validate` takes the answer text and the `chunks` list (label and `chunk_id`) from the pack that the app keeps. It checks that the answer is valid JSON, that each label is in the list, and that each cited chunk still exists. It returns the URI of each citation.
-- An answer that the engine cut at `max_tokens` is not valid JSON. The result is `valid: false` with the problem `not_json`.
+- An answer that the generator cut at `max_tokens` is not valid JSON. The result is `valid: false` with the problem `not_json`.
 - `omitted` gives the reason for each dropped candidate: `budget`, `quota` or `duplicate`.
 - `debug` is filled only when the request sets `debug: true`. It holds the lexical rank, dense rank, exact rank, RRF score, rerank score and `rerank_truncated` of each candidate.
 
@@ -444,7 +444,7 @@ Prompt files can also go into a RAG with the `prompt` source kind. Such prompts 
 
 ### Lifecycle
 
-The lifecycle follows the engine's [embedding guide](https://github.com/xatcap/xat-llm-engine/blob/main/docs/embedding.md). The names are similar to the engine's `Urls` and `Engine__ReadyFile`:
+The service has this lifecycle:
 
 - `XatRag__Urls=http://127.0.0.1:0` lets the system choose a free port.
 - The service loads the recipes, the models and the indexes before it accepts requests.
@@ -541,7 +541,7 @@ Apps make new RAG setups by writing recipes, not code. Service settings use envi
 
 ## 11. Errors
 
-See [ADR 0009](adr/0009-error-model.md). Each kind of failure has one error type and one status code. xat-rag never retries. There is no silent fallback. All errors use the engine's body: `{"error": {"message", "type"}}`. Where the engine has a type with the same meaning, xat-rag uses the same name.
+See [ADR 0009](adr/0009-error-model.md). Each kind of failure has one error type and one status code. xat-rag never retries. There is no silent fallback. All errors use one body: `{"error": {"message", "type"}}`.
 
 | Error type | Status | Example |
 |---|---|---|
@@ -556,7 +556,7 @@ See [ADR 0009](adr/0009-error-model.md). Each kind of failure has one error type
 | `parse_error` | In the result of one document | One document did not parse. The `reason` is one of `invalid`, `encrypted`, `no_text_layer`, `unsupported_media_type`, `too_large`, `limit_exceeded` or `parse_timeout`. |
 | `internal_error` | 500 | An unexpected failure, or a failed stage such as the reranker. The response has no details. |
 
-xat-rag does not use the engine's `budget_exceeded_error`, because there it means a used token budget of a provider (429). Error messages never repeat input values. xat-rag replaces the default validation messages of pydantic and FastAPI. Each validation message names the fields that failed, and never the input value.
+Error messages never repeat input values. xat-rag replaces the default validation messages of pydantic and FastAPI. Each validation message names the fields that failed, and never the input value.
 
 A failure at startup stops the process with a non-zero exit code and a message that tells what to do. Examples are a model with a wrong sha256, sqlite-vec that does not load, and a bad recipe.
 
@@ -640,7 +640,7 @@ The service depends on `opentelemetry-api`, because FastAPI requires it. xat-rag
   - It sets `PRAGMA secure_delete = ON` on each connection that it opens.
   - It turns on the FTS5 `secure-delete` option of the lexical index.
   - It runs `PRAGMA wal_checkpoint(TRUNCATE)` after a delete. If readers block the checkpoint, it tries again for about 5 seconds, and then it raises an error.
-- The tests check that deleted lexical text is gone from the files. They do not check the shadow tables of sqlite-vec yet. Vectors can leak text, so this check is an open item (section 19).
+- The tests check that deleted lexical text is gone from the files. They do not check the shadow tables of sqlite-vec yet. Vectors can leak text, so this check is an open item (section 18).
 - Software cannot remove all copies. SSD wear leveling, file system journals, backups and snapshots can keep old data. To remove a whole RAG, delete its file. The docs of the app must tell this to its users.
 
 ### Personal data
@@ -666,30 +666,7 @@ v1 has no plugin loading. A change to one of these parts needs a change to the c
 - **LangChain users.** A `xat_rag.langchain` module is planned. v0.1 does not have it. The retrievers, the embedder and the reranker are LangChain objects in the packages, and an app can import them.
 - **A new render template.** The renderer has a version constant, `render-v1`. The constant is not in the manifest. A change to the template changes the budget text, so the change needs a test and a release note.
 
-## 16. The log-viewer example
-
-```
-App                      xat-rag service                         xat-llm-engine
- | start both: port 0, ready files, stdin pipes ------------------------------>|
- | PUT /v1/rags/{docs,jira,diffs}/documents  (on sync, only changes)           |
- |---------------------->|                                                     |
- | user selects log lines                                                      |
- | POST /v1/context {context:"log-triage", log_lines:[...], selected_lines:[...]}
- |---------------------->| LogQueryBuilder -> hybrid search for each RAG       |
- |                       | -> rerank -> MMR -> quotas -> pack                  |
- |<----------------------| {rendered.messages, citation.grammar, C1..Cn, max_tokens}
- | POST /v1/chat/completions {model:"local/ministral-3-3b", messages,          |
- |                            grammar, max_tokens: 768} ---------------------->|
- |<------------------- message content: '{"answer": "...", "citations": ["C2"]}'
- | POST /v1/citations/validate {answer, chunks: [{label, chunk_id}]}           |
- |---------------------->|                                                     |
- |<----------------------| {valid: true, citations: [{label, chunk_id, uri}]}  |
- | show the answer with links to the ticket, the diff hunk and the doc section |
-```
-
-`selected_lines` holds zero-based indexes of `log_lines`.
-
-## 17. Requirement map
+## 16. Requirement map
 
 | Requirement | Where |
 |---|---|
@@ -710,9 +687,9 @@ App                      xat-rag service                         xat-llm-engine
 | NFR-10 | Section 5 |
 | NFR-12 | [ADR 0002](adr/0002-python.md) |
 | NFR-13 | [Writing style](writing-style.md) |
-| Defaults | Section 18 |
+| Defaults | Section 17 |
 
-## 18. Defaults
+## 17. Defaults
 
 The maintainer decided these v1 defaults on 2026-11-07. A recipe can change the recipe values. The service settings can change the limits.
 
@@ -733,7 +710,7 @@ The maintainer decided these v1 defaults on 2026-11-07. A recipe can change the 
 | Service | Two worker threads, a queue limit of 8 requests, and ONNX Runtime threads chosen by ONNX Runtime |
 | Upgrades | A monthly batch. Security fixes (for example pypdf) at once. |
 
-## 19. Later versions and open items
+## 18. Later versions and open items
 
 Later versions:
 

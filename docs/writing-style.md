@@ -34,7 +34,7 @@ If a rule makes a sentence harder to read, make the sentence easy to read. For e
 | vendor | The company that operates a cloud service. | provider, for the company |
 | start | Make a program or a task begin. | launch, spin up, boot |
 | stop | Make a program or a task end. | shut down, terminate. Use "kill" only for the operating system action. |
-| caller | A program that sends requests to the engine or to the xat-rag service. | client, for the program that uses the API |
+| caller | A program that sends requests to the xat-rag service. | client, for the program that uses the API |
 | RAG | One named index in xat-rag, with its sources and its retrieval settings. | collection, knowledge base |
 | source | One kind of input in a RAG, such as `docs`, `jira`, `diff` or `prompt`. | connector, for an input kind |
 | document | One item that a caller sends to a RAG, such as one ticket, one diff or one Markdown file. | file, record |

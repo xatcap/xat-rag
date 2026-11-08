@@ -6,13 +6,13 @@
 
 ## Context
 
-Apps of the organization can be written in Flutter, .NET or Python. A Python-only library works only for Python apps. A service works for all of them, and it follows the model of xat-llm-engine.
+Apps of the organization can be written in Flutter, .NET or Python. A Python-only library works only for Python apps. A service works for all of them.
 
 ## Decision
 
 - The package `xat-rag` is the public Python library. Python tools and the evaluation harness use it directly.
 - The package `xat-rag-service` is a thin HTTP host over the library. It has no logic of its own.
-- The service has the same lifecycle as the engine:
+- The service has this lifecycle:
   - It accepts only loopback connections (`127.0.0.1`).
   - Port 0 lets the system choose a free port.
   - A ready file holds the address, the process ID and the version.
@@ -29,7 +29,7 @@ Apps of the organization can be written in Flutter, .NET or Python. A Python-onl
 ## Consequences
 
 - Any app can use xat-rag, in any language.
-- The app starts and stops two processes: the engine and the xat-rag service. The two use the same pattern, so the app can use the same code for both.
+- The app must start and stop the xat-rag service as a separate process.
 - Each request makes one local HTTP call. The time of this call is small compared with the search time.
 - The library API and the HTTP API are both SemVer contracts.
 - The app must make and keep the access key. A program that can read the environment of the service can read the key.

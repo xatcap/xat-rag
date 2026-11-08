@@ -1,6 +1,6 @@
 """Start the service after `harden_process()`: settings, logs, lock, models, app, server and lifecycle.
 
-The lifecycle follows the engine: port 0, a ready file, a stop when standard input closes, and one
+The lifecycle is: port 0, a ready file, a stop when standard input closes, and one
 service for each data folder. See ADR 0003.
 """
 

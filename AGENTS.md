@@ -14,7 +14,7 @@ This file is an index to the documentation in this repository.
 
 | Page | What it covers |
 |------|----------------|
-| [README.md](README.md) | The goal of xat-rag, who it is for, what it is not, and how an app uses it next to xat-llm-engine. |
+| [README.md](README.md) | The goal of xat-rag, who it is for, what it is not, and how an app uses it. |
 | [docs/research.md](docs/research.md) | Industry practices for RAG with small models and small context windows, the draft requirements and the open questions. |
 | [docs/architecture.md](docs/architecture.md) | Packages, ports, data model, ingestion and query flows, the budget model, the context pack, the HTTP service, recipes, errors, models, evaluation, privacy and the open items of v0.1. |
 | [docs/api.md](docs/api.md) | The HTTP routes of the service, with the request and response bodies, the errors, the upload format, the settings and the limits. |
@@ -36,7 +36,7 @@ The ADRs record the significant decisions and their reasons. Read them before yo
 | [0005. Store each RAG in one SQLite file with a manifest](docs/adr/0005-sqlite-store-and-index-manifest.md) | Accepted |
 | [0006. Use hybrid search with RRF and a cross-encoder reranker, without query rewriting](docs/adr/0006-hybrid-retrieval-and-reranking.md) | Accepted |
 | [0007. Let the context recipe own the budget, and count tokens with the generator's tokenizer](docs/adr/0007-context-budget-and-token-counting.md) | Accepted |
-| [0008. Return a context pack, and have no integration with xat-llm-engine](docs/adr/0008-context-pack-and-citations.md) | Accepted |
+| [0008. Return a context pack, and do not call a generator](docs/adr/0008-context-pack-and-citations.md) | Accepted |
 | [0009. Map each kind of failure to one error type, with no retries](docs/adr/0009-error-model.md) | Accepted |
 | [0010. Treat retrieved text as untrusted, keep content out of logs, and accept only pushed documents](docs/adr/0010-untrusted-content-privacy-and-ingestion.md) | Accepted |
 | [0011. Turn off tracing and telemetry at startup, and guard against network access](docs/adr/0011-offline-hardening.md) | Accepted |

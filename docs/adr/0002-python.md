@@ -6,7 +6,7 @@
 
 ## Context
 
-xat-llm-engine is written in .NET. xat-rag can use the same stack, or a stack with better retrieval tools. The apps call xat-rag through a loopback HTTP API (see [ADR 0003](0003-library-and-loopback-service.md)), so the language of the app does not matter.
+xat-rag needs good retrieval tools, and it can use any stack. The apps call xat-rag through a loopback HTTP API (see [ADR 0003](0003-library-and-loopback-service.md)), so the language of the app does not matter.
 
 The hard part of xat-rag is retrieval quality: chunkers, the log query builder and the evaluation gate. The evaluation must run in the same language as the pipeline that it measures.
 
@@ -15,8 +15,7 @@ The hard part of xat-rag is retrieval quality: chunkers, the log query builder a
 | Retrieval and evaluation tools | The best: `tokenizers`, `onnxruntime`, `sqlite-vec` wheels, tree-sitter wheels, IR metric libraries, model export tools. | Medium: official ONNX Runtime and `Microsoft.ML.Tokenizers`. No maintained tree-sitter binding, no log template library, weak evaluation tools. | Strong libraries, but the slowest development. |
 | SQLite extensions | `sqlite3` in the standard library. The interpreter must allow `enable_load_extension`. python-build-standalone allows it. Some system builds do not. | `Microsoft.Data.Sqlite` has FTS5. We ship sqlite-vec for each platform. | Native. |
 | Package size and start time | A frozen folder of about 120 to 200 MB, plus models. Start time 1 to 3 s. | Self-contained, about 70 to 100 MB. Start time below 0.5 s. | About 30 to 60 MB. |
-| Signing | Many native libraries to sign. macOS notarization needs care. | The same as the engine. | Simple. |
-| Shared code with the engine | None. We copy the conventions. | Some lifecycle and error code. | None. |
+| Signing | Many native libraries to sign. macOS notarization needs care. | Standard .NET signing. | Simple. |
 
 ## Decision
 
@@ -32,7 +31,6 @@ Freeze the service with PyInstaller (one folder) on python-build-standalone. Cha
 - **Accepted risk:** we did not test packaging and signing on the three platforms before this decision. The first release task freezes, signs and notarizes the service on macOS arm64, Windows x64 and Linux x64. If this fails, we write a new ADR.
 - The release package is larger and starts more slowly than a .NET package. `langchain-core` with `langsmith` and the document parsers add to the size and the start time. This cost is small next to the models and the 2 GB generator.
 - `lxml` (for DOCX) and the other native libraries must be signed and notarized on macOS.
-- The engine and xat-rag share conventions, not code.
 
 ## Measured (v0.1)
 

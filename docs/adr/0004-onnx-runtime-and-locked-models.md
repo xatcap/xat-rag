@@ -6,7 +6,7 @@
 
 ## Context
 
-xat-llm-engine does not do embeddings or reranking. xat-rag must run these models itself, offline, on consumer CPUs. The two options were ONNX Runtime in the process, or llama.cpp `--embedding` and `--reranking` as child processes.
+xat-rag must run the embedding and reranking models itself, offline, on consumer CPUs. The two options were ONNX Runtime in the process, or llama.cpp `--embedding` and `--reranking` as child processes.
 
 ## Decision
 
@@ -15,7 +15,7 @@ xat-llm-engine does not do embeddings or reranking. xat-rag must run these model
   - Embedder: `bge-small-en-v1.5` (MIT), 384 dimensions, int8.
   - Reranker: `ms-marco-MiniLM-L6-v2` (Apache-2.0), int8.
 - `build/models.lock.json` lists each model with its source repository, revision and license. It lists each file of each model with its size and sha256.
-- `tools/fetch_models.py` gets the files at build time only. The models ship as a separate release file, as in the engine's ADR 0003.
+- `tools/fetch_models.py` gets the files at build time only. The models ship as a separate release file.
 - At startup, xat-rag checks the size and the sha256 of each file. It caches the result in the data folder for faster starts.
 - `OnnxEmbeddings` implements LangChain `Embeddings`, and `OnnxCrossEncoderCompressor` implements LangChain `BaseDocumentCompressor`. See [ADR 0001](0001-langchain-core-as-foundation.md). LangChain's `FastEmbedEmbeddings`, `HuggingFaceEmbeddings` and `CrossEncoderReranker` are not used, because they download models or need torch.
 - xat-rag loads tokenizers only with `Tokenizer.from_file`, never with `from_pretrained`, which can download. The offline settings for `huggingface_hub` are in [ADR 0011](0011-offline-hardening.md).

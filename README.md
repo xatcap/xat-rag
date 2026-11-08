@@ -33,7 +33,7 @@ xat-rag is for developers of desktop apps who want these things:
 3. The app asks for a context with a question or with log lines.
 4. xat-rag searches each RAG, merges and reranks the results, and packs the best chunks into the budget.
 5. xat-rag returns a **context pack**: the chat messages, the chunks with labels, and a grammar for an answer with citations.
-6. The app sends the messages to [xat-llm-engine](https://github.com/xatcap/xat-llm-engine). Then it asks xat-rag to check the citations in the answer.
+6. The app sends the messages to its generator. Then it asks xat-rag to check the citations in the answer.
 
 ## Why use it
 
@@ -46,7 +46,7 @@ xat-rag is for developers of desktop apps who want these things:
 
 ## What it is not
 
-- It does not generate text, and it has no integration with xat-llm-engine. The app calls the engine itself.
+- It does not generate text. The app calls its generator itself.
 - It does not connect to JIRA, GitHub or other network services. The app sends the documents.
 - It does not offer an embeddings API for other programs.
 - It is not a server for a team. It accepts requests only from programs on the same machine.
@@ -74,7 +74,7 @@ rag = XatRag.open(
 rag.ingest([RawDocument("jira:PROJ-123.json", "jira", SourceKind.JIRA, issue_json_bytes)])
 rag.checkpoint("jira")
 pack = rag.compose(ContextRequest("log-triage", log_lines=tuple(lines)))
-# Send pack.messages, pack.grammar and pack.max_tokens to xat-llm-engine. xat-rag never calls a model.
+# Send pack.messages, pack.grammar and pack.max_tokens to your generator. xat-rag never calls a model.
 check = rag.check_citations(answer_text, {c.label: c.chunk_id for c in pack.chunks})
 ```
 
