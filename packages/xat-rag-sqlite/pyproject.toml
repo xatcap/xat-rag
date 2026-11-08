@@ -1,0 +1,23 @@
+[project]
+name = "xat-rag-sqlite"
+version = "0.1.0"
+description = "The SQLite store of xat-rag: documents, chunks, manifest, FTS5 and sqlite-vec retrievers."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+dependencies = [
+    "xat-rag-core",
+    "numpy>=2.1,<3",
+    "langchain-core>=1.7.6,<2",
+    "sqlite-vec==0.1.9",
+]
+
+[tool.uv.sources]
+xat-rag-core = { workspace = true }
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/xat_rag_sqlite"]

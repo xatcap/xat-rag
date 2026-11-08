@@ -1,0 +1,119 @@
+[
+ {
+  "chunk_id": "diffs:4f2a9c1.diff#f/src/main/java/com/shop/OrderService.java/hunk/1",
+  "hash": "96c6a9c09be973ab",
+  "span": {
+   "end": 41,
+   "start": 40,
+   "type": "line"
+  }
+ },
+ {
+  "chunk_id": "diffs:9b1e2d0.diff#f/config/orders.yaml/hunk/1",
+  "hash": "2ae7da985de2831c",
+  "span": {
+   "end": 4,
+   "start": 3,
+   "type": "line"
+  }
+ },
+ {
+  "chunk_id": "docs:cafeteria.md#h/cafeteria/menu",
+  "hash": "41a1e704af00796a",
+  "span": {
+   "end": 5,
+   "start": 5,
+   "type": "line"
+  }
+ },
+ {
+  "chunk_id": "docs:orders.md#h/orders-service/ports-and-health",
+  "hash": "c79bc78cc51eca1f",
+  "span": {
+   "end": 5,
+   "start": 5,
+   "type": "line"
+  }
+ },
+ {
+  "chunk_id": "docs:orders.md#h/orders-service/order-lookup-errors",
+  "hash": "ca4aad100266ca0f",
+  "span": {
+   "end": 9,
+   "start": 9,
+   "type": "line"
+  }
+ },
+ {
+  "chunk_id": "docs:orders.md#h/orders-service/database-timeouts",
+  "hash": "04cc696c64a77ce1",
+  "span": {
+   "end": 13,
+   "start": 13,
+   "type": "line"
+  }
+ },
+ {
+  "chunk_id": "docs:payments.md#h/payments-service/card-declines",
+  "hash": "c702ee5952719372",
+  "span": {
+   "end": 5,
+   "start": 5,
+   "type": "line"
+  }
+ },
+ {
+  "chunk_id": "docs:payments.md#h/payments-service/refunds",
+  "hash": "fed2d628132ecc34",
+  "span": {
+   "end": 9,
+   "start": 9,
+   "type": "line"
+  }
+ },
+ {
+  "chunk_id": "jira:PAY-7.json#desc",
+  "hash": "0a8981abcda03f9f",
+  "span": {
+   "end": 3,
+   "start": 1,
+   "type": "line"
+  }
+ },
+ {
+  "chunk_id": "jira:PROJ-123.json#desc",
+  "hash": "ded5b33fdef0c369",
+  "span": {
+   "end": 3,
+   "start": 1,
+   "type": "line"
+  }
+ },
+ {
+  "chunk_id": "jira:PROJ-123.json#comment/10023",
+  "hash": "75a011425cb0bf4c",
+  "span": {
+   "end": 1,
+   "start": 1,
+   "type": "line"
+  }
+ },
+ {
+  "chunk_id": "jira:PROJ-200.json#desc",
+  "hash": "8e818fd7bc0bb5ad",
+  "span": {
+   "end": 3,
+   "start": 1,
+   "type": "line"
+  }
+ },
+ {
+  "chunk_id": "jira:PROJ-200.json#comment/20001",
+  "hash": "42b062909a63c81c",
+  "span": {
+   "end": 1,
+   "start": 1,
+   "type": "line"
+  }
+ }
+]

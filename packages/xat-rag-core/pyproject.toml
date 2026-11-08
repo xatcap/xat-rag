@@ -1,0 +1,18 @@
+[project]
+name = "xat-rag-core"
+version = "0.1.0"
+description = "The domain model, ports and pipeline rules of xat-rag: fusion, budget, packing, rendering and citations."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+dependencies = [
+    "numpy>=2.1,<3",
+    "langchain-core>=1.7.6,<2",
+]
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/xat_rag_core"]

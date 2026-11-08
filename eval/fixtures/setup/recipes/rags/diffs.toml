@@ -1,0 +1,11 @@
+[rag]
+name = "diffs"
+embedder = "bge-small-en-v1.5"
+reranker = "ms-marco-minilm-l6-v2"
+
+[sources.main]
+kind = "diff"
+max_chunk_tokens = 350
+
+[retrieval]
+keep = 6

@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.pyright/
+*.egg-info/
+dist/
+build/out/
+
+# Models are release assets, never source files
+models/*
+!models/README.txt
+*.onnx
+
+# Machine files
+.DS_Store

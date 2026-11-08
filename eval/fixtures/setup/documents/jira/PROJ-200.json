@@ -1,0 +1,1 @@
+{"key": "PROJ-200", "fields": {"summary": "Database connection pool exhausted at peak", "description": "PSQLException connection timed out during the sale. Pool size was 10.", "status": {"name": "Open"}, "comment": {"comments": [{"id": "20001", "body": "Raise pool size to 30 in orders.yaml."}]}}}

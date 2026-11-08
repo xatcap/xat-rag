@@ -1,0 +1,80 @@
+"""Start the real service in a child process, with the hardening, and call it over loopback."""
+
+import json
+import os
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+import pytest
+from service_setup import KEY, MODELS, write_setup
+
+pytestmark = [
+    pytest.mark.skipif(not (MODELS / "bge-small-en-v1.5" / "model.onnx").exists(), reason="models not fetched"),
+    pytest.mark.allow_hosts(["127.0.0.1"]),
+]
+
+
+def _get(url: str, path: str, key: str | None = KEY) -> tuple[int, dict[str, object]]:
+    request = urllib.request.Request(url + path, headers={"Authorization": f"Bearer {key}"} if key else {})
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return response.status, json.loads(response.read())
+    except urllib.error.HTTPError as error:
+        return error.code, json.loads(error.read())
+
+
+def test_service_starts_hardened_and_stops_when_input_closes(tmp_path: Path) -> None:
+    env = {
+        **{k: v for k, v in os.environ.items() if k in {"PATH", "HOME", "TMPDIR", "SYSTEMROOT"}},
+        **write_setup(tmp_path),
+        "XatRag__Urls": "http://127.0.0.1:0",
+        "XatRag__ReadyFile": str(tmp_path / "ready.json"),
+        "XatRag__StopWhenInputCloses": "true",
+        "LANGSMITH_TRACING": "true",
+        "LANGSMITH_API_KEY": "fake-key",
+        "OPENAI_API_KEY": "fake-key",
+    }
+    service = subprocess.Popen(
+        [sys.executable, "-m", "xat_rag_service.main"],
+        env=env,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    try:
+        ready = tmp_path / "ready.json"
+        for _ in range(600):
+            if ready.exists() or service.poll() is not None:
+                break
+            time.sleep(0.1)
+        assert ready.exists(), service.stderr.read().decode() if service.stderr else ""
+        info = json.loads(ready.read_text())
+        url = info["url"]
+        assert url.startswith("http://127.0.0.1:")
+        assert info["pid"] == service.pid
+        assert _get(url, "/health/live", key=None)[0] == 200
+        assert _get(url, "/v1/rags", key="wrong")[0] == 401
+        status, body = _get(url, "/health/ready")
+        assert status == 200, body
+        status, body = _get(url, "/v1/rags")
+        assert status == 200
+        assert {rag["name"] for rag in body["rags"]} == {"docs", "manuals"}  # type: ignore[union-attr]
+        second = subprocess.run(
+            [sys.executable, "-m", "xat_rag_service.main"], env=env, capture_output=True, timeout=120, check=False
+        )
+        assert second.returncode != 0
+        assert b"another service uses the data folder" in second.stderr
+    finally:
+        assert service.stdin is not None
+        service.stdin.close()
+        try:
+            service.wait(timeout=30)
+        except subprocess.TimeoutExpired:
+            service.kill()
+            raise
+    assert service.returncode == 0
+    assert not (tmp_path / "ready.json").exists()

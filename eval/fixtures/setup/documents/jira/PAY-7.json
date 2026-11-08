@@ -1,0 +1,1 @@
+{"key": "PAY-7", "fields": {"summary": "Refund runner fails with RefundFailedError", "description": "The nightly refund-runner stops with RefundFailedError when the provider returns 500.", "status": {"name": "In Progress"}}}

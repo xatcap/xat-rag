@@ -1,0 +1,6 @@
+--- a/config/orders.yaml
++++ b/config/orders.yaml
+@@ -3,2 +3,2 @@ database:
+-  pool_size: 10
++  pool_size: 30
+   timeout_ms: 5000

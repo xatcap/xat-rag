@@ -1,0 +1,1 @@
+{"key": "PROJ-123", "fields": {"summary": "OrderNotFoundException for ids with a prefix", "description": "Orders with the prefix X- are not found by OrderService.find. The id is not trimmed.", "status": {"name": "Done"}, "resolution": {"name": "Fixed"}, "comment": {"comments": [{"id": "10023", "body": "Fixed in commit 4f2a9c1 by trimming the id."}]}}}

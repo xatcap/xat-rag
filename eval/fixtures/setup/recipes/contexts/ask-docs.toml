@@ -1,0 +1,7 @@
+[context]
+name = "ask-docs"
+generator = "ministral-3-3b"
+query_builder = "text-v1"
+
+[[context.sources]]
+rag = "docs"

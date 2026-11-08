@@ -1,0 +1,45 @@
+# 0003. Offer a Python library and a loopback HTTP service
+
+- Status: Accepted
+- Date: 2026-11-07
+- Deciders: Project maintainer
+
+## Context
+
+Apps of the organization can be written in Flutter, .NET or Python. A Python-only library works only for Python apps. A service works for all of them, and it follows the model of xat-llm-engine.
+
+## Decision
+
+- The package `xat-rag` is the public Python library. Python tools and the evaluation harness use it directly.
+- The package `xat-rag-service` is a thin HTTP host over the library. It has no logic of its own.
+- The service has the same lifecycle as the engine:
+  - It accepts only loopback connections (`127.0.0.1`).
+  - Port 0 lets the system choose a free port.
+  - A ready file holds the address, the process ID and the version.
+  - It can stop when its standard input closes.
+  - A lock file allows one service for each data folder.
+- Loopback is not enough protection, because other programs and web pages can reach `127.0.0.1`. Thus:
+  - Each request must send a random access key that the app gives at each start (`XatRag__AccessKey`).
+  - The service accepts only loopback `Host` values, sends no CORS headers and refuses requests with an `Origin` header.
+  - On macOS and Linux, the service can listen on a Unix socket.
+- The settings use environment variables with the prefix `XatRag__`.
+- Document upload uses `multipart/form-data`, so binary files (PDF, DOCX) need no base64 encoding. See [ADR 0012](0012-document-parsers.md).
+- The routes are under `/v1`. Each release publishes its OpenAPI document. See [architecture, section 9](../architecture.md#9-http-service).
+
+## Consequences
+
+- Any app can use xat-rag, in any language.
+- The app starts and stops two processes: the engine and the xat-rag service. The two use the same pattern, so the app can use the same code for both.
+- Each request makes one local HTTP call. The time of this call is small compared with the search time.
+- The library API and the HTTP API are both SemVer contracts.
+- The app must make and keep the access key. A program that can read the environment of the service can read the key.
+
+## Implementation notes (v0.1)
+
+- The routes are listed in the [API reference](../api.md). The settings are in the same page.
+- The access key has at least 16 ASCII characters. The service reads it once, and it removes the variable from the environment.
+- The settings use the `XatRag__` prefix. The names are not case-sensitive.
+- FastAPI serves the OpenAPI schema at `/openapi.json`. The build does not write a separate copy of it, so the rule of a published OpenAPI document is not met yet.
+- The service loads the recipes, the prompts, the models and the indexes before it listens. It has no loading state.
+- A second service with the same data folder stops with an error. The lock file is `xat-rag.lock` in the data folder.
+- Ingestion jobs live in memory. A restart of the service loses them.

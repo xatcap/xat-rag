@@ -1,0 +1,79 @@
+{
+  "kinds": {
+    "diff": {
+      "cases": 2,
+      "mrr": {
+        "dense": 1.0,
+        "exact": 0.5,
+        "fused": 1.0,
+        "lexical": 1.0,
+        "reranked": 1.0
+      },
+      "ndcg": {
+        "dense": 1.0,
+        "exact": 0.5,
+        "fused": 1.0,
+        "lexical": 1.0,
+        "reranked": 1.0
+      },
+      "pack_recall": 1.0,
+      "recall": {
+        "dense": 1.0,
+        "exact": 0.5,
+        "fused": 1.0,
+        "lexical": 1.0,
+        "reranked": 1.0
+      }
+    },
+    "jira": {
+      "cases": 3,
+      "mrr": {
+        "dense": 1.0,
+        "exact": 0.0,
+        "fused": 1.0,
+        "lexical": 1.0,
+        "reranked": 1.0
+      },
+      "ndcg": {
+        "dense": 1.0,
+        "exact": 0.0,
+        "fused": 1.0,
+        "lexical": 1.0,
+        "reranked": 1.0
+      },
+      "pack_recall": 1.0,
+      "recall": {
+        "dense": 1.0,
+        "exact": 0.0,
+        "fused": 1.0,
+        "lexical": 1.0,
+        "reranked": 1.0
+      }
+    },
+    "markdown": {
+      "cases": 5,
+      "mrr": {
+        "dense": 1.0,
+        "exact": 0.0,
+        "fused": 1.0,
+        "lexical": 1.0,
+        "reranked": 1.0
+      },
+      "ndcg": {
+        "dense": 1.0,
+        "exact": 0.0,
+        "fused": 1.0,
+        "lexical": 1.0,
+        "reranked": 1.0
+      },
+      "pack_recall": 1.0,
+      "recall": {
+        "dense": 1.0,
+        "exact": 0.0,
+        "fused": 1.0,
+        "lexical": 1.0,
+        "reranked": 1.0
+      }
+    }
+  }
+}
