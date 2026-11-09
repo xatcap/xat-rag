@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/xatcap-logo-dark.svg">
-    <img src="docs/assets/xatcap-logo.svg" alt="The xatcap logo: a cat with sunglasses and a witch hat" width="160">
+    <img src="docs/assets/xatcap-logo.svg" alt="The xatcap logo: a straw sun hat with a ribbon bow" width="160">
   </picture>
 </p>
 
