@@ -50,7 +50,10 @@ def load_lock(path: Path) -> dict[str, ModelLock]:
             entry = ModelLock(model["id"], model["role"], model["repo"], model["revision"], model["license"], files)
             result[entry.id] = entry
     except (OSError, ValueError, KeyError, TypeError) as error:
-        raise ConfigError(f"The model lock '{path}' is missing or damaged.") from error
+        raise ConfigError(
+            f"The model lock '{path}' is missing or damaged. "
+            "Put the model files and the lock file in the models folder, or correct the path of the lock file."
+        ) from error
     return result
 
 
@@ -86,7 +89,9 @@ def verify_model(
         try:
             stat = path.stat()
         except OSError as error:
-            raise ConfigError(f"The model file '{path}' is missing. Run the release fetch of the models.") from error
+            raise ConfigError(
+                f"The model file '{path}' is missing. Put the files that the lock file lists in the models folder."
+            ) from error
         if stat.st_size != entry.size:
             raise ConfigError(f"The model file '{path}' has the wrong size. Get the locked file again.")
         key = str(path.resolve())

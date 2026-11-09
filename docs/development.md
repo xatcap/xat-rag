@@ -106,7 +106,7 @@ Then add the rebuild to the release notes. The manifest makes the old indexes ne
 
 ## Run the service from source
 
-The service needs the settings in [API reference](api.md#settings). For a local run, set these variables and start the service:
+The service needs the settings in [API reference](api.md#settings). From source, no default applies to the path settings, so the four path settings are required. For a local run, set these variables and start the service:
 
 ```bash
 export XatRag__DataFolder="$PWD/build/out/dev-data"
@@ -123,11 +123,20 @@ When the service is ready, the ready file holds its URL. Read the `url` field fr
 
 `build/release.py` has these tasks:
 
-- `package` runs PyInstaller with `build/xat-rag-service.spec`. The output is one folder, `build/out/dist/xat-rag-service/`. It contains the executable and the libraries. The models are not in the folder. The app installs them next to it. The task also copies the default recipes from `eval/fixtures/setup/recipes` to the `recipes/` subfolder. These are the RAGs `docs` (Markdown), `jira` and `diffs`, and the contexts `ask-docs` and `triage`. To use them, set `XatRag__RecipesFolder` to that subfolder. The spec excludes the modules of ADR 0011, section 4, and the optional imports that the service does not use, such as PIL, setuptools and `pkg_resources`.
-- `check-bundle` fails when a denied module is in the frozen folder. It checks the folder, the native libraries and the modules in the archive.
-- `smoke-test` starts the frozen executable with the default recipes in the frozen folder. It sets `LANGSMITH_TRACING=true`. The service must turn tracing off. The test ingests `eval/fixtures/setup/documents/docs/orders.md`, waits for the job, and asks the `ask-docs` context about the port of the orders service. The test passes when the first chunk has the expected chunk ID, the source document and a line span. The service has 300 seconds to start. The stderr output goes to a file in the test folder. If the service does not start in time, the test fails. The test stops the service by closing its standard input. If the service does not stop within 60 seconds, the test kills it.
-- `archive <tag>` puts the frozen folder in `build/out/release/xat-rag-service-<tag>-<system>-<machine>`. The file is a `.zip` file on Windows and a `.tar.gz` file on Linux and macOS.
-- `archive-models <tag>` puts the files of `build/models.lock.json`, and the lock file itself, in `build/out/release/xat-rag-models-<tag>.zip`. Extract the file to a folder. Set `XatRag__ModelsFolder` to that folder, and set `XatRag__LockFile` to the `models.lock.json` file in it.
+- `package` runs PyInstaller with `build/xat-rag-service.spec`. The output is one folder, `build/out/dist/xat-rag-service/`. This folder is the release folder. It contains the executable, the libraries and these folders:
+  - `recipes/`: a copy of the default recipes from `eval/fixtures/setup/recipes`. These are the RAGs `docs` (Markdown), `jira` and `diffs`, and the contexts `ask-docs` and `triage`.
+  - `data/`: empty. It is the default data folder.
+  - `models/`: empty. The models are not in the release folder.
+
+  The spec excludes the modules of ADR 0011, section 4, and the optional imports that the service does not use, such as PIL, setuptools and `pkg_resources`.
+- `check-bundle` fails when a denied module is in the frozen folder. It checks the folder, the native libraries and the modules in the archive. It also fails when `data/` or `models/` is not empty, or when `recipes/rags/` holds no RAG recipe.
+- `smoke-test` runs the frozen executable two times:
+  1. With explicit settings for the data, recipes, models, lock file and ready file.
+  2. With no path settings. The test first copies the frozen folder to a temporary folder. The folder name has a space and a non-ASCII character. The test copies the model files and the lock file into the copy, and then it starts the copy.
+
+  Each run sets `LANGSMITH_TRACING=true`. The service must turn tracing off. Each run ingests `eval/fixtures/setup/documents/docs/orders.md`, waits for the job, and asks the `ask-docs` context about the port of the orders service. A run passes when the first chunk has the expected chunk ID, the source document and a line span. The service has 300 seconds to start. The stderr output goes to a file in the folder of the run. If the service does not start in time, the test fails. The test stops the service by closing its standard input. If the service does not stop within 60 seconds, the test kills it. After the second run, the test fails if its ready file still exists. The test also fails if `data/` or `models/` in the frozen folder is not empty.
+- `archive <tag>` puts the frozen folder in `build/out/release/xat-rag-service-<tag>-<system>-<machine>`. The file is a `.zip` file on Windows and a `.tar.gz` file on Linux and macOS. It fails when `data/` or `models/` is not empty, or when `recipes/rags/` holds no RAG recipe.
+- `archive-models <tag>` puts the files of `build/models.lock.json`, and the lock file itself, in `build/out/release/xat-rag-models-<tag>.zip`. The lock file is at the root of the archive. To use the models in a release, extract the archive into the `models/` folder of the release. No setting is needed. From source, extract the archive to any folder. Set `XatRag__ModelsFolder` to that folder, and set `XatRag__LockFile` to the `models.lock.json` file in it.
 
 [ADR 0002](adr/0002-python.md#measured-v01) records the measured size and start times.
 

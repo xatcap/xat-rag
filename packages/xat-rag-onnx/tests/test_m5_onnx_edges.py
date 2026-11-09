@@ -74,6 +74,11 @@ def test_load_lock_refuses_a_damaged_lock(tmp_path: Path, content: str) -> None:
         load_lock(path)
 
 
+def test_load_lock_says_what_to_do_for_a_missing_lock(tmp_path: Path) -> None:
+    with pytest.raises(ConfigError, match="Put the model files and the lock file in the models folder"):
+        load_lock(tmp_path / "lock.json")
+
+
 def test_load_lock_reads_a_valid_lock(tmp_path: Path) -> None:
     path = tmp_path / "lock.json"
     entry = {

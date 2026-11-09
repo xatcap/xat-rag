@@ -62,11 +62,13 @@ def test_service_starts_hardened_and_stops_when_input_closes(tmp_path: Path) -> 
         status, body = _get(url, "/v1/rags")
         assert status == 200
         assert {rag["name"] for rag in body["rags"]} == {"docs", "manuals"}  # type: ignore[union-attr]
+        before = ready.read_bytes()
         second = subprocess.run(
             [sys.executable, "-m", "xat_rag_service.main"], env=env, capture_output=True, timeout=120, check=False
         )
-        assert second.returncode != 0
-        assert b"another service uses the data folder" in second.stderr
+        assert second.returncode == 2
+        assert b"Another service uses the data folder" in second.stderr
+        assert ready.read_bytes() == before  # A second start must not delete the file of the running service.
     finally:
         assert service.stdin is not None
         service.stdin.close()

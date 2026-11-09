@@ -89,6 +89,16 @@ forbidden_modules = [
 ]
 
 [[tool.importlinter.contracts]]
+name = "The service paths module runs before the hardening and imports no library"
+type = "forbidden"
+source_modules = ["xat_rag_service.paths"]
+forbidden_modules = [
+    "xat_rag_offline", "xat_rag_core", "xat_rag_sqlite", "xat_rag_parsers", "xat_rag_documents", "xat_rag_onnx",
+    "xat_rag_tokenizers", "xat_rag", "xat_rag_eval", "xat_rag_service.settings", "xat_rag_service.run",
+    "langchain_core", "langsmith", "uvicorn", "fastapi",
+]
+
+[[tool.importlinter.contracts]]
 name = "No banned LangChain packages or tiktoken"
 type = "forbidden"
 source_modules = ["xat_rag_offline", "xat_rag_core", "xat_rag_sqlite", "xat_rag_parsers", "xat_rag_documents", "xat_rag_onnx", "xat_rag_tokenizers", "xat_rag", "xat_rag_service", "xat_rag_eval"]

@@ -28,7 +28,7 @@ SETUP = ROOT / "eval" / "fixtures" / "setup"
 
 
 def package() -> None:
-    """Build the frozen folder, and add the default recipes to it."""
+    """Build the frozen folder. Add the default recipes, and the empty `data` and `models` folders."""
     subprocess.run(
         [
             sys.executable,
@@ -45,6 +45,8 @@ def package() -> None:
         check=True,
     )
     shutil.copytree(SETUP / "recipes", DIST / "recipes")
+    (DIST / "data").mkdir()
+    (DIST / "models").mkdir()
 
 
 # Top-level modules that must never be in the frozen folder (ADR 0011 section 4).
@@ -97,6 +99,18 @@ def check_bundle() -> None:
     if not any((internal / "sqlite_vec").glob("vec0.*")):
         sys.exit("The frozen folder holds no sqlite_vec/vec0 extension file.")
     print("the frozen folder holds the sqlite_vec extension")
+    _check_default_folders()
+
+
+def _check_default_folders() -> None:
+    """Fail unless `data` and `models` exist and are empty, and `recipes` holds the default recipes."""
+    for name in ("data", "models"):
+        folder = DIST / name
+        if not folder.is_dir() or any(folder.iterdir()):
+            sys.exit(f"The folder '{folder}' must exist and be empty.")
+    if not any((DIST / "recipes" / "rags").glob("*.toml")):
+        sys.exit(f"The folder '{DIST / 'recipes'}' holds no default recipes.")
+    print("the frozen folder holds the default folders")
 
 
 def _call(
@@ -120,78 +134,110 @@ def _call(
             return error.code, {"raw": body[:200].decode(errors="replace")}
 
 
+def _binary(folder: Path) -> Path:
+    return folder / ("xat-rag-service.exe" if os.name == "nt" else "xat-rag-service")
+
+
+def _locked_model_names() -> list[str]:
+    models = json.loads(LOCK.read_text())["models"]
+    return [f"{model['id']}/{entry['path']}" for model in models for entry in model["files"]]
+
+
+def _base_environment() -> dict[str, str]:
+    kept = {"PATH", "HOME", "TMPDIR", "TEMP", "TMP", "SYSTEMROOT", "USERPROFILE", "APPDATA", "LOCALAPPDATA"}
+    env = {k: v for k, v in os.environ.items() if k.upper() in kept}
+    return env | {"XatRag__StopWhenInputCloses": "true", "LANGSMITH_TRACING": "true"}
+
+
 def smoke_test() -> None:
-    """Start the frozen service with its default recipes, ingest one document, and make a retrieval result."""
-    binary = DIST / ("xat-rag-service.exe" if os.name == "nt" else "xat-rag-service")
+    """Start the frozen service with explicit settings, and then with the default paths of a release copy."""
     with tempfile.TemporaryDirectory() as folder:
         work = Path(folder)
-        kept = {"PATH", "HOME", "TMPDIR", "TEMP", "TMP", "SYSTEMROOT", "USERPROFILE", "APPDATA", "LOCALAPPDATA"}
-        env = {k: v for k, v in os.environ.items() if k.upper() in kept}
-        env |= {
-            "XatRag__DataFolder": str(work / "data"),
+        explicit = work / "explicit"
+        explicit.mkdir()
+        env = _base_environment() | {
+            "XatRag__DataFolder": str(explicit / "data"),
             "XatRag__RecipesFolder": str(DIST / "recipes"),
             "XatRag__ModelsFolder": str(ROOT / "models"),
-            "XatRag__LockFile": str(ROOT / "build" / "models.lock.json"),
-            "XatRag__ReadyFile": str(work / "ready.json"),
-            "XatRag__StopWhenInputCloses": "true",
-            "LANGSMITH_TRACING": "true",
+            "XatRag__LockFile": str(LOCK),
+            "XatRag__ReadyFile": str(explicit / "ready.json"),
         }
-        log = (work / "stderr.txt").open("wb")
-        process = subprocess.Popen([str(binary)], env=env, stdin=subprocess.PIPE, stderr=log)  # noqa: S603
+        _exercise(_binary(DIST), env, explicit / "ready.json", explicit, ROOT)
+
+        # The defaults run on a copy, so that the archive of the frozen folder stays free of models and data.
+        copy = work / "xat rag é" / DIST.name
+        shutil.copytree(DIST, copy, symlinks=True)
+        for name in _locked_model_names():
+            target = copy / "models" / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(ROOT / "models" / name, target)
+        shutil.copy2(LOCK, copy / "models" / LOCK.name)
+        ready = copy / "data" / "ready.json"
+        _exercise(_binary(copy), _base_environment(), ready, work, work)
+        if ready.exists():
+            sys.exit("The service did not delete its ready file when it stopped.")
+    _check_default_folders()
+    print("smoke test passed")
+
+
+def _exercise(binary: Path, env: dict[str, str], ready: Path, logs: Path, cwd: Path) -> None:
+    """Start the service, ingest one document, make a retrieval result, and stop the service."""
+    log = (logs / "stderr.txt").open("wb")
+    process = subprocess.Popen([str(binary)], env=env, stdin=subprocess.PIPE, stderr=log, cwd=cwd)  # noqa: S603
+    try:
+        started = time.monotonic()
+        while not ready.exists():
+            if process.poll() is not None or time.monotonic() - started > 300:
+                log.flush()
+                sys.exit(f"The service did not start: {(logs / 'stderr.txt').read_text(errors='replace')[-2000:]}")
+            time.sleep(0.1)
+        print(f"ready in {time.monotonic() - started:.1f} s")
+        url = json.loads(ready.read_text())["url"]
+        document = (SETUP / "documents" / "docs" / "orders.md").read_bytes()
+        boundary = "smoke7b1"
+        fields = json.dumps([{"doc_id": "docs:orders.md", "kind": "markdown", "part": "f"}]).encode()
+        body = (
+            f'--{boundary}\r\nContent-Disposition: form-data; name="documents"\r\n\r\n'.encode()
+            + fields
+            + f'\r\n--{boundary}\r\nContent-Disposition: form-data; name="f"; filename="f"\r\n\r\n'.encode()
+            + document
+            + f"\r\n--{boundary}--\r\n".encode()
+        )
+        status, job = _call(
+            url,
+            "/v1/rags/docs/documents",
+            body=body,
+            content_type=f"multipart/form-data; boundary={boundary}",
+            method="PUT",
+        )
+        assert status == 202, job
+        for _ in range(300):
+            status, state = _call(url, f"/v1/jobs/{job['job_id']}")
+            if state["status"] in {"done", "failed"}:
+                break
+            time.sleep(0.1)
+        assert state["status"] == "done", state
+        question = json.dumps({"context": "ask-docs", "question": "Which port do orders use?"}).encode()
+        status, result = _call(url, "/v1/context", body=question, method="POST")
+        assert status == 200, result
+        first = result["chunks"][0]
+        assert first["chunk_id"] == "docs:orders.md#h/orders-service/ports-and-health", first
+        assert first["source"]["doc_id"] == "docs:orders.md", first
+        assert first["source"]["span"]["type"] == "line", first
+    finally:
+        assert process.stdin is not None
+        process.stdin.close()
         try:
-            started = time.monotonic()
-            while not (work / "ready.json").exists():
-                if process.poll() is not None or time.monotonic() - started > 300:
-                    log.flush()
-                    sys.exit(f"The service did not start: {(work / 'stderr.txt').read_text(errors='replace')[-2000:]}")
-                time.sleep(0.1)
-            print(f"ready in {time.monotonic() - started:.1f} s")
-            url = json.loads((work / "ready.json").read_text())["url"]
-            document = (SETUP / "documents" / "docs" / "orders.md").read_bytes()
-            boundary = "smoke7b1"
-            fields = json.dumps([{"doc_id": "docs:orders.md", "kind": "markdown", "part": "f"}]).encode()
-            body = (
-                f'--{boundary}\r\nContent-Disposition: form-data; name="documents"\r\n\r\n'.encode()
-                + fields
-                + f'\r\n--{boundary}\r\nContent-Disposition: form-data; name="f"; filename="f"\r\n\r\n'.encode()
-                + document
-                + f"\r\n--{boundary}--\r\n".encode()
-            )
-            status, job = _call(
-                url,
-                "/v1/rags/docs/documents",
-                body=body,
-                content_type=f"multipart/form-data; boundary={boundary}",
-                method="PUT",
-            )
-            assert status == 202, job
-            for _ in range(300):
-                status, state = _call(url, f"/v1/jobs/{job['job_id']}")
-                if state["status"] in {"done", "failed"}:
-                    break
-                time.sleep(0.1)
-            assert state["status"] == "done", state
-            question = json.dumps({"context": "ask-docs", "question": "Which port do orders use?"}).encode()
-            status, result = _call(url, "/v1/context", body=question, method="POST")
-            assert status == 200, result
-            first = result["chunks"][0]
-            assert first["chunk_id"] == "docs:orders.md#h/orders-service/ports-and-health", first
-            assert first["source"]["doc_id"] == "docs:orders.md", first
-            assert first["source"]["span"]["type"] == "line", first
-            print("smoke test passed")
-        finally:
-            assert process.stdin is not None
-            process.stdin.close()
-            try:
-                process.wait(timeout=60)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait(timeout=30)
-            log.close()
+            process.wait(timeout=60)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=30)
+        log.close()
 
 
 def archive(version: str) -> None:
     """Archive the frozen folder: a zip file on Windows, and a tar file on other systems, to keep file modes."""
+    _check_default_folders()
     system = {"Linux": "linux", "Darwin": "macos", "Windows": "windows"}[platform.system()]
     machine = {"x86_64": "x64", "amd64": "x64", "arm64": "arm64", "aarch64": "arm64"}[platform.machine().lower()]
     RELEASE.mkdir(parents=True, exist_ok=True)
@@ -208,11 +254,9 @@ def archive_models(version: str) -> None:
     """Archive the files that the lock lists, with the lock file. The contents match `XatRag__ModelsFolder`."""
     RELEASE.mkdir(parents=True, exist_ok=True)
     path = RELEASE / f"xat-rag-models-{version}.zip"
-    models = json.loads(LOCK.read_text())["models"]
-    names = [f"{model['id']}/{entry['path']}" for model in models for entry in model["files"]]
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as handle:
         handle.write(LOCK, LOCK.name)
-        for name in names:
+        for name in _locked_model_names():
             handle.write(ROOT / "models" / name, name)
     print(path)
 

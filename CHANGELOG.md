@@ -97,6 +97,22 @@ A request with a removed field gets 400.
 - The model lock role `generator_tokenizer` is now `size_tokenizer`. The file `tekken.json` is no longer in the lock.
 - Index manifest: the key `generator_tokenizer_id` is now `size_tokenizer_id`. An old manifest still loads.
 
+### Release folder and default paths
+
+- The frozen service has default paths. They are next to its executable: `data/`, `recipes/`, `models/`, `models/models.lock.json` and `data/ready.json`. A release folder starts with no path setting. See [ADR 0016](docs/adr/0016-release-folder-default-paths.md).
+- A path setting with an empty value uses its default. An empty `XatRag__ReadyFile` means no ready file.
+- From source, no default applies. The four path settings are required, as before.
+- The release folder has empty `data/` and `models/` folders. The models are not in the release. Extract the models archive, `xat-rag-models-<tag>.zip`, into `models/`.
+- Startup failures exit with code 2. They print one line that starts with `xat-rag:`.
+- The stale ready file is deleted after the data folder lock is taken. A second start no longer deletes the ready file of the running service.
+- The Unix socket of the frozen service has the mode `0600` by default.
+
+### Upgrade steps for the release folder
+
+1. Move `data/` and `models/` out of the release folder before you replace it. Replacing the folder deletes both folders.
+2. Or send the documents again, after the new release starts, to build the indexes again.
+3. If the release folder is read-only, set `XatRag__DataFolder` to a folder that the user can write to.
+
 ### Added documents
 
 - [App guide](docs/app-guide.md): tokens, prompts, escaping, citations, the question and errors.

@@ -401,13 +401,13 @@ The [API reference](api.md#access-and-the-request-checks) lists the request chec
 
 - **The `Host` check** stops DNS rebinding.
 - **The `Origin` check** and the absence of CORS headers refuse browser requests that carry an `Origin` header. A browser sends no `Origin` header on a cross-site `GET` without CORS. Such a request reaches the service, but the page cannot read the response. A page can still detect the service, and it can use the request slots for a short time.
-- **A Unix socket** on macOS and Linux can use the file permissions to decide who connects. The service sets the mode `0600` only when `XatRag__ReadyFile` is set. Without a ready file, the socket is open to all users. Windows has no Unix socket mode in xat-rag, so it gives no control against other users.
+- **A Unix socket** on macOS and Linux can use the file permissions to decide who connects. The service sets the mode `0600` when `XatRag__ReadyFile` is set. The frozen service sets a ready file by default, so its socket has this mode by default. Without a ready file, the socket is open to all users. Windows has no Unix socket mode in xat-rag, so it gives no control against other users.
 
 ### Lifecycle
 
-The [API reference](api.md#lifecycle) lists the start order. A stale ready file from an earlier run is deleted at start.
+The [API reference](api.md#lifecycle) lists the start order. A stale ready file from an earlier run is deleted at start, after the service takes the data folder lock. A second service with the same data folder stops before it deletes any file.
 
-A startup failure stops the service. A bad recipe, a bad model or a bad setting gives a message and exit code 2 or another non-zero code.
+A startup failure stops the service with exit code 2 and one line that starts with `xat-rag:`. A bad recipe, a bad model, a bad setting or an unusable folder gives this result. One exception is a bind failure on a busy port. It prints the message of uvicorn instead.
 
 ## 10. Recipes
 

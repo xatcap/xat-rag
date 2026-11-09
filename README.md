@@ -84,7 +84,19 @@ Before the text goes to an LLM, count its tokens with the tokenizer of that LLM.
 
 ### Service
 
-Set the settings and start the service.
+A release folder starts the service with no setting. It has these folders next to the executable:
+
+- `recipes/` holds the default recipes.
+- `data/` holds the indexes. It is empty in a release.
+- `models/` holds the model files. It is empty in a release.
+
+Extract the models archive, `xat-rag-models-<tag>.zip`, into `models/`. Then start the service. On Windows, run `xat-rag-service.exe`:
+
+```bash
+./xat-rag-service
+```
+
+From source, set the settings and start the service:
 
 ```bash
 export XatRag__DataFolder=/path/to/data
@@ -97,7 +109,7 @@ xat-rag-service
 
 The service has no authentication. Each program on the same machine, including the programs of other users, can use it. Read [ADR 0015](docs/adr/0015-remove-service-access-key.md) before you use the service on a shared machine.
 
-The ready file holds the URL of the service. Use that URL in each request:
+The ready file holds the URL of the service. In a release, it is `data/ready.json`. Use that URL in each request:
 
 ```bash
 curl -s -X POST "$URL/v1/context" \

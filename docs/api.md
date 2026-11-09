@@ -14,7 +14,7 @@ URL=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["url"])' r
 
 The service has no authentication. Each program on the machine can connect to the TCP port, including the programs of other users. A program that connects can use every route. See [ADR 0015](adr/0015-remove-service-access-key.md).
 
-A Unix socket has the mode `0600` only when `XatRag__ReadyFile` is set. Without a ready file, the socket is open to all users. With a ready file, it is open to all users for a short time at the start.
+A Unix socket has the mode `0600` when `XatRag__ReadyFile` is set. The frozen service sets a ready file by default, so its socket has this mode by default. Without a ready file, the socket is open to all users. With a ready file, it is open to all users for a short time at the start.
 
 Every request goes through these checks, in this order:
 
@@ -332,14 +332,20 @@ The service reads its settings from environment variables. The names are not cas
 | Variable | Required | Default | Meaning |
 |---|---|---|---|
 | `XatRag__Urls` | No | `http://127.0.0.1:0` | `http://127.0.0.1:<port>` or `http://[::1]:<port>`. Port 0 lets the system choose. Or `http://unix:<path>` for a Unix socket. |
-| `XatRag__DataFolder` | Yes | (none) | The folder for the indexes, the lock file `xat-rag.lock` and the model check cache. The mode is `0700`. |
-| `XatRag__RecipesFolder` | Yes | (none) | The folder with `rags/*.toml` and `contexts/*.toml`. |
-| `XatRag__ModelsFolder` | Yes | (none) | The folder with the model files. |
-| `XatRag__LockFile` | Yes | (none) | The model lock file, `build/models.lock.json`. |
-| `XatRag__ReadyFile` | No | (none) | The file that holds `{url, pid, version}` when the service is ready. The mode is `0600`. |
+| `XatRag__DataFolder` | Yes, from source | `<release>/data` | The folder for the indexes, the lock file `xat-rag.lock` and the model check cache. The mode is `0700`. |
+| `XatRag__RecipesFolder` | Yes, from source | `<release>/recipes` | The folder with `rags/*.toml` and `contexts/*.toml`. |
+| `XatRag__ModelsFolder` | Yes, from source | `<release>/models` | The folder with the model files. |
+| `XatRag__LockFile` | Yes, from source | `<ModelsFolder>/models.lock.json` | The model lock file. From source, the file is `build/models.lock.json`. |
+| `XatRag__ReadyFile` | No | `<DataFolder>/ready.json` | The file that holds `{url, pid, version}` when the service is ready. The mode is `0600`. An empty value means no ready file. |
 | `XatRag__StopWhenInputCloses` | No | `false` | `true` stops the service when its standard input closes. |
 | `XatRag__QueueLimit` | No | `8` | The number of requests that can wait or run in the pool. From 1 to 1000. |
 | `XatRag__Threads` | No | `0` | The threads of ONNX Runtime. `0` lets ONNX Runtime choose. From 0 to 256. |
+
+In the table, `<release>` is the folder of the frozen executable. The defaults apply only to the frozen service. From source, no default applies, so the four path settings are required.
+
+A path setting with a value uses that value. A path setting with an empty value uses its default. The lock file follows `XatRag__ModelsFolder`, and the ready file follows `XatRag__DataFolder`.
+
+On Windows, the `set` command deletes a variable when its value is empty. To pass an empty `XatRag__ReadyFile` on Windows, the program that starts the service must set the variable with an empty value in the environment of the process.
 
 `XatRag__Urls` accepts loopback addresses only. A `localhost` host is listened on as `127.0.0.1`. Any other host is an error at start.
 
@@ -347,10 +353,16 @@ The service removes `LANGSMITH_*`, `LANGCHAIN_*` and each variable whose name en
 
 ## Lifecycle
 
-1. The service checks its settings.
-2. It takes the lock of the data folder. A second service with the same folder stops with an error.
-3. It loads the recipes, the models and the indexes. A recipe with an unknown key stops the start, and the message names the field.
-4. It starts to listen. It writes the ready file. The ready file is deleted when the service stops.
+1. The service reads its settings. In a release, each path setting without a value uses its default.
+2. It takes the lock of the data folder. A second service with the same folder stops with exit code 2. It deletes no file, so the ready file of the running service stays.
+3. It deletes the stale ready file, if a ready file is set. A file from an earlier run must not show an old address.
+4. It checks that the recipes folder exists.
+5. It loads the recipes, the models and the indexes. A recipe with an unknown key stops the start, and the message names the field. A missing model file or a damaged lock file also stops the start.
+6. It starts to listen. It writes the ready file.
+
+The ready file is deleted when the service stops. A failed start prints one line that starts with `xat-rag:`, and it exits with code 2. This includes a ready file that cannot be written. A failed start can leave the file `xat-rag.lock` in the data folder. The next start takes the lock again.
+
+One start failure does not follow this rule. A bind failure on a busy port in `XatRag__Urls` prints the message of uvicorn instead.
 
 A ready file looks like this:
 

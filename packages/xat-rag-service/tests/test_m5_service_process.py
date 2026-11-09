@@ -110,9 +110,48 @@ def test_a_missing_data_folder_setting_stops_the_start_with_a_message(tmp_path: 
     env = base_env(tmp_path)
     del env["XatRag__DataFolder"]
     result = run_once(env)
-    assert result.returncode != 0
+    assert result.returncode == 2
     assert b"set XatRag__DataFolder" in result.stderr
     assert b"Traceback" not in result.stderr
+
+
+def test_a_missing_recipes_folder_stops_the_start_with_exit_code_2(tmp_path: Path) -> None:
+    ready = tmp_path / "ready.json"
+    env = {**base_env(tmp_path), "XatRag__RecipesFolder": str(tmp_path / "none"), "XatRag__ReadyFile": str(ready)}
+    result = run_once(env)
+    assert result.returncode == 2
+    assert b"recipes folder" in result.stderr
+    assert b"Traceback" not in result.stderr
+    assert not ready.exists()
+
+
+def test_an_unusable_data_folder_stops_the_start_with_exit_code_2(tmp_path: Path) -> None:
+    blocker = tmp_path / "file"
+    blocker.write_text("x")
+    result = run_once({**base_env(tmp_path), "XatRag__DataFolder": str(blocker / "data")})
+    assert result.returncode == 2
+    assert b"Traceback" not in result.stderr
+
+
+def test_a_ready_file_that_cannot_be_written_stops_the_service_with_exit_code_2(tmp_path: Path) -> None:
+    ready = tmp_path / "missing" / "ready.json"
+    result = run_once({**base_env(tmp_path), "XatRag__ReadyFile": str(ready)})
+    assert result.returncode == 2
+    assert b"cannot write the ready file" in result.stderr
+    assert b"Traceback" not in result.stderr
+    assert not ready.exists()
+
+
+def test_the_entry_point_imports_no_library_before_the_hardening() -> None:
+    code = (
+        "import sys, xat_rag_service.main\n"
+        "names = ('langchain_core', 'langsmith', 'uvicorn', 'xat_rag', 'xat_rag_core')\n"
+        "print([name for name in names if name in sys.modules])"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code], env=kept_environment(), capture_output=True, timeout=120, check=True
+    )
+    assert result.stdout.strip() == b"[]"
 
 
 def test_bad_number_settings_stop_the_start_with_exit_code_2(tmp_path: Path) -> None:

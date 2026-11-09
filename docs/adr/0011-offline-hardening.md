@@ -6,6 +6,8 @@
 
 > Part of this decision is superseded on 2026-11-09 by [ADR 0015](0015-remove-service-access-key.md). The hardening no longer reads, keeps or removes an access key. The other steps stay in force. The text below is the history of the decision.
 
+> Section 1 is amended on 2026-11-09 by [ADR 0016](0016-release-folder-default-paths.md). Before the hardening, `main` reads the data folder with `xat_rag_service.paths`. That module imports only the standard library, so no xat-rag library or LangChain code runs before `harden_process()`. The rest of section 1 stays in force.
+
 ## Context
 
 xat-rag must work offline, with no telemetry and no downloads. `langchain-core` ships the `langsmith` client. LangSmith tracing is off by default, but it starts when one of these variables is the exact string `true`:

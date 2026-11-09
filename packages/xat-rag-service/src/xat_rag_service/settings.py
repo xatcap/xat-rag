@@ -7,6 +7,15 @@ from urllib.parse import urlsplit
 
 from xat_rag_core.errors import ConfigError
 
+from xat_rag_service.paths import (
+    read_setting,
+    resolve_data_folder,
+    resolve_lock_file,
+    resolve_models_folder,
+    resolve_ready_file,
+    resolve_recipes_folder,
+)
+
 
 @dataclass(frozen=True, slots=True)
 class Listen:
@@ -32,19 +41,10 @@ class ServiceSettings:
     threads: int
 
 
-def _get(environ: Mapping[str, str], name: str) -> str | None:
-    wanted = f"XATRAG__{name}".upper()
-    for key, value in environ.items():
-        if key.upper() == wanted:
-            return value
-    return None
-
-
-def _required(environ: Mapping[str, str], name: str) -> Path:
-    value = _get(environ, name)
-    if not value:
+def _required(value: Path | None, name: str) -> Path:
+    if value is None:
         raise ConfigError(f"Set XatRag__{name}.")
-    return Path(value)
+    return value
 
 
 def parse_listen(url: str) -> Listen:
@@ -66,24 +66,26 @@ def parse_listen(url: str) -> Listen:
     return Listen(host, port, None)
 
 
-def read_settings(environ: Mapping[str, str]) -> ServiceSettings:
-    """Read the settings. Raise `ConfigError` with an actionable message on a problem."""
-    ready = _get(environ, "ReadyFile")
+def read_settings(environ: Mapping[str, str], release: Path | None = None) -> ServiceSettings:
+    """Read the settings. `release` is the release folder of the defaults, or `None` when there are no defaults.
+
+    Raise `ConfigError` with an actionable message on a problem.
+    """
     try:
-        queue_limit = int(_get(environ, "QueueLimit") or "8")
-        threads = int(_get(environ, "Threads") or "0")
+        queue_limit = int(read_setting(environ, "QueueLimit") or "8")
+        threads = int(read_setting(environ, "Threads") or "0")
     except ValueError as error:
         raise ConfigError("XatRag__QueueLimit and XatRag__Threads must be whole numbers.") from error
     if not 1 <= queue_limit <= 1000 or not 0 <= threads <= 256:
         raise ConfigError("XatRag__QueueLimit must be 1 to 1000, and XatRag__Threads 0 to 256.")
     return ServiceSettings(
-        listen=parse_listen(_get(environ, "Urls") or "http://127.0.0.1:0"),
-        data_folder=_required(environ, "DataFolder"),
-        recipes_folder=_required(environ, "RecipesFolder"),
-        models_folder=_required(environ, "ModelsFolder"),
-        lock_file=_required(environ, "LockFile"),
-        ready_file=Path(ready) if ready else None,
-        stop_when_input_closes=(_get(environ, "StopWhenInputCloses") or "").lower() == "true",
+        listen=parse_listen(read_setting(environ, "Urls") or "http://127.0.0.1:0"),
+        data_folder=_required(resolve_data_folder(environ, release), "DataFolder"),
+        recipes_folder=_required(resolve_recipes_folder(environ, release), "RecipesFolder"),
+        models_folder=_required(resolve_models_folder(environ, release), "ModelsFolder"),
+        lock_file=_required(resolve_lock_file(environ, release), "LockFile"),
+        ready_file=resolve_ready_file(environ, release),
+        stop_when_input_closes=(read_setting(environ, "StopWhenInputCloses") or "").lower() == "true",
         queue_limit=queue_limit,
         threads=threads,
     )

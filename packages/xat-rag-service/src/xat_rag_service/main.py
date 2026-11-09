@@ -1,26 +1,23 @@
 """The entry point of the xat-rag service.
 
 `harden_process()` runs first, before any other xat-rag or LangChain import (ADR 0011). This module
-imports only the standard library and `xat_rag_offline` at the top.
+imports only the standard library, `xat_rag_offline` and `xat_rag_service.paths` at the top.
 """
 
 import os
 import sys
-from pathlib import Path
 
 from xat_rag_offline import harden_process
 
-
-def _setting(name: str) -> str | None:
-    wanted = f"XATRAG__{name}".upper()
-    return next((value for key, value in os.environ.items() if key.upper() == wanted), None)
+from xat_rag_service.paths import release_folder, resolve_data_folder
 
 
 def main() -> None:
     """Harden the process, then start the service. Exit with a message on a startup failure."""
-    data = _setting("DataFolder")
-    if not data:
-        sys.exit("xat-rag: set XatRag__DataFolder.")
+    data = resolve_data_folder(os.environ, release_folder())
+    if data is None:
+        print("xat-rag: set XatRag__DataFolder.", file=sys.stderr)
+        sys.exit(2)
     import sqlite_vec  # noqa: PLC0415  # pyright: ignore[reportMissingTypeStubs]
 
     extension = str(sqlite_vec.loadable_path())  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
@@ -29,7 +26,7 @@ def main() -> None:
     def on_block(event: str) -> None:  # The event name only, never the address or the data (ADR 0011).
         print(f"xat-rag: the network guard refused '{event}'.", file=sys.stderr)
 
-    harden_process(Path(data), allowed_extensions=[extension, *(extension + s for s in suffixes)], on_block=on_block)
+    harden_process(data, allowed_extensions=[extension, *(extension + s for s in suffixes)], on_block=on_block)
 
     from xat_rag_service.run import run  # noqa: PLC0415 - after the hardening, by design.
 

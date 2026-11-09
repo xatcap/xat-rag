@@ -25,7 +25,7 @@ from xat_rag_core.model import BlockSpan, LineSpan, PageSpan, RawDocument, Skipp
 from xat_rag_core.query import RetrievalQuery
 from xat_rag_service.app import Limiter, error_response
 from xat_rag_service.jobs import Job, JobManager, JobStatus
-from xat_rag_service.run import lock_data_folder, write_ready_file
+from xat_rag_service.run import lock_data_folder, remove_ready_file, write_ready_file
 from xat_rag_service.serialize import chunk_json, document_result_json, query_json, result_json, span_json
 from xat_rag_service.settings import Listen, parse_listen, read_settings
 from xat_rag_service.uploads import MAX_DOCUMENTS, DocumentFields, Upload, raw_documents, read_upload
@@ -777,11 +777,36 @@ def test_only_one_service_can_hold_a_data_folder(tmp_path: Path) -> None:
     first = lock_data_folder(folder)
     try:
         assert folder.is_dir()
-        with pytest.raises(SystemExit, match="another service uses the data folder"):
+        with pytest.raises(ConfigError, match="Another service uses the data folder"):
             lock_data_folder(folder)
     finally:
         first.close()
     lock_data_folder(folder).close()
+
+
+def test_a_data_folder_that_cannot_be_made_is_a_config_error(tmp_path: Path) -> None:
+    blocker = tmp_path / "file"
+    blocker.write_text("x")
+    with pytest.raises(ConfigError, match="cannot write to the data folder"):
+        lock_data_folder(blocker / "data")
+
+
+def test_a_ready_file_that_cannot_be_deleted_is_a_config_error(tmp_path: Path) -> None:
+    with pytest.raises(ConfigError, match="cannot delete the ready file"):
+        remove_ready_file(tmp_path)
+
+
+def test_a_missing_ready_file_needs_no_delete(tmp_path: Path) -> None:
+    remove_ready_file(tmp_path / "ready.json")
+
+
+def test_a_failed_ready_file_write_leaves_no_temporary_file(tmp_path: Path) -> None:
+    target = tmp_path / "ready.json"
+    target.mkdir()
+    (target / "child").write_text("x")  # `os.replace` cannot put a file over a folder.
+    with pytest.raises(OSError):  # noqa: PT011 - the operating system chooses the subclass.
+        write_ready_file(target, "http://127.0.0.1:5000")
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["ready.json"]
 
 
 def test_logs_of_libraries_that_can_hold_content_are_off() -> None:

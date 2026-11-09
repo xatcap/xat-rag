@@ -39,11 +39,12 @@ The ADRs record the significant decisions and their reasons. Read them before yo
 | [0008. Return a context pack, and do not call a generator](docs/adr/0008-context-pack-and-citations.md) | Superseded by 0014 |
 | [0009. Map each kind of failure to one error type, with no retries](docs/adr/0009-error-model.md) | Accepted |
 | [0010. Treat retrieved text as untrusted, keep content out of logs, and accept only pushed documents](docs/adr/0010-untrusted-content-privacy-and-ingestion.md) | Partly superseded by 0014 and 0015 |
-| [0011. Turn off tracing and telemetry at startup, and guard against network access](docs/adr/0011-offline-hardening.md) | Partly superseded by 0015 |
+| [0011. Turn off tracing and telemetry at startup, and guard against network access](docs/adr/0011-offline-hardening.md) | Partly superseded by 0015, and section 1 amended by 0016 |
 | [0012. Parse PDF, DOCX and HTML in the service process, with limits](docs/adr/0012-document-parsers.md) | Accepted |
 | [0013. Remove log handling and exact lookups from queries](docs/adr/0013-remove-log-handling-and-exact-lookups.md) | Accepted |
 | [0014. Make xat-rag retrieval-only: the app fits the context, and xat-rag has no model knowledge](docs/adr/0014-retrieval-only-and-app-side-fitting.md) | Accepted |
 | [0015. Remove the access key of the service](docs/adr/0015-remove-service-access-key.md) | Accepted |
+| [0016. Use the release folder for the default paths of the frozen service](docs/adr/0016-release-folder-default-paths.md) | Accepted |
 
 ## Packages and tools
 
