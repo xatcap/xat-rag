@@ -1,4 +1,4 @@
-"""`XatRag`: the public library facade and the composition root. See ADR 0003.
+"""`XatRag`: the public library facade and the composition root.
 
 The facade takes and returns xat-rag types only.
 """
@@ -45,7 +45,7 @@ class XatRag:
         self._contexts = MappingProxyType(dict(contexts))
         self._models = models
         self._rags = MappingProxyType(dict(rags))
-        self._parse_lock = threading.Lock()  # One binary parse at a time (ADR 0012).
+        self._parse_lock = threading.Lock()  # One binary parse at a time.
         self._boundary_lock = threading.BoundedSemaphore(1)  # One split-point batch at a time, so queries can run.
         self._lock = threading.Lock()
         self._indexes: dict[str, RagIndex] = {}

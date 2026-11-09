@@ -1,7 +1,7 @@
 """A network guard that uses a Python audit hook.
 
 The guard is defense in depth only. It sees only Python audit events, so native code
-(for example ONNX Runtime or a SQLite extension) can pass it. See ADR 0011.
+(for example ONNX Runtime or a SQLite extension) can pass it.
 """
 
 import ipaddress

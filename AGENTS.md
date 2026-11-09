@@ -54,7 +54,7 @@ xat-rag is written in Python. The [Python guidelines](docs/portable/python/index
 
 ### .NET
 
-These pages are a shared baseline. General principles (SOLID, coupling, ADRs) are here, and the Python guidelines refer to them. The [index](docs/portable/dotnet/index.md) gives a suggested reading order.
+These pages are a shared baseline. General principles (SOLID, coupling) are here, and the Python guidelines refer to them. The [index](docs/portable/dotnet/index.md) gives a suggested reading order.
 
 | Page | What it covers |
 |------|----------------|

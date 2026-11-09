@@ -1,7 +1,7 @@
 """Start the service after `harden_process()`: settings, logs, lock, models, app, server and lifecycle.
 
 The lifecycle is: port 0, a ready file, a stop when standard input closes, and one
-service for each data folder. See ADR 0003.
+service for each data folder.
 """
 
 import contextlib
@@ -29,9 +29,9 @@ LOG = logging.getLogger("xat_rag")
 
 
 def configure_logs() -> None:
-    """Log errors and events only. Logs never hold content (ADR 0010).
+    """Log errors and events only. Logs never hold content.
 
-    pypdf and other libraries can log parts of a bad file, so their logs are off.
+    Docling and other libraries can log parts of a bad file, so their logs are off.
     """
     logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     for name in ("docling", "docling_parse", "uvicorn.access", "httpx", "onnxruntime"):
@@ -43,7 +43,7 @@ def lock_data_folder(folder: Path) -> IO[bytes]:
     try:
         folder.mkdir(mode=0o700, parents=True, exist_ok=True)
         if os.name != "nt":
-            folder.chmod(0o700)  # The indexes hold sensitive text (architecture, section 14).
+            folder.chmod(0o700)  # The indexes hold sensitive text.
         handle = (folder / "xat-rag.lock").open("a+b")
     except OSError as error:
         raise ConfigError(

@@ -1,4 +1,4 @@
-"""RAG recipes and context recipes (TOML). Unknown keys are errors. See the architecture, section 10."""
+"""RAG recipes and context recipes (TOML). Unknown keys are errors. See "Recipes" in the API reference."""
 
 import hashlib
 import json

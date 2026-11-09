@@ -1,6 +1,6 @@
 """The parser contract: `SectionParser` and a deadline.
 
-Parsers get bytes, never paths or URLs, so a parser cannot read files or the network. See ADR 0012.
+Parsers get bytes, never paths or URLs, so a parser cannot read files or the network.
 """
 
 import time

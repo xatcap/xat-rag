@@ -6,7 +6,7 @@ The domain model, the ports and the rules of xat-rag. See the [architecture](../
 |---|---|
 | `errors` | The error types and their HTTP status codes. |
 | `model` | `SourceDocument`, `Chunk`, the span types, `Candidate`, `RawDocument` and the parse result types. |
-| `ids` | Content hashes, chunk IDs, heading anchors and slugs. `log_id` makes a hashed ID for logs. No code uses it yet. |
+| `ids` | Content hashes, chunk IDs, heading anchors and slugs. `log_id` makes a hashed ID for logs. No code uses it. |
 | `parsing` | `SectionParser` (the protocol of the parsers), `Deadline`, `decode_text` and `source_document`. |
 | `markdown_form` | `SourceBlock`, the typed blocks that readers make. `render_markdown()` makes the one Markdown form of a document from its blocks. `build_sections()` makes one section for each heading. |
 | `spans` | `span_to_meta()` and `span_from_meta()`, which store the span of a chunk as metadata. |

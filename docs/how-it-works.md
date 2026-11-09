@@ -144,7 +144,7 @@ A table that fits stays whole. A larger table splits at its rows, and each piece
 
 The embedder can also choose the split points. It does this for a too large section with four or more parts. The split then goes where the topic changes. A document with more than 20000 parts uses only the structure, and its result gets the note `semantic_split_unit_limit`.
 
-Pieces do not overlap. An evaluation found no gain from overlap, so overlap is off. The results are in `eval/split_comparison.json`.
+Pieces do not overlap.
 
 A chunk must fit two limits:
 

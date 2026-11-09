@@ -1,6 +1,6 @@
 """The error types of xat-rag. Each kind of failure has one error type and one HTTP status.
 
-See ADR 0009. Error messages never hold document text or input values.
+Error messages never hold document text or input values.
 """
 
 from collections.abc import Mapping

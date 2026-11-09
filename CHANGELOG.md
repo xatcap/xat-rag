@@ -4,11 +4,11 @@
 
 ### Breaking changes
 
-xat-rag is now retrieval-only. It returns ranked chunks of text, and it has no model knowledge. The app fits the chunks to its LLM, builds the prompt, escapes the text and checks the citations. See [ADR 0014](docs/adr/0014-retrieval-only-and-app-side-fitting.md) and [ADR 0013](docs/adr/0013-remove-log-handling-and-exact-lookups.md). The [app guide](docs/app-guide.md) describes the new work of the app.
+xat-rag is now retrieval-only. It returns ranked chunks of text, and it has no model knowledge. The app fits the chunks to its LLM, builds the prompt, escapes the text and checks the citations. The [quickstart](docs/quickstart.md#6-what-your-app-must-do) describes the work of the app.
 
 Log handling and exact lookups are removed. There is one query path for a plain question.
 
-The access key of the service is removed. See [ADR 0015](docs/adr/0015-remove-service-access-key.md). Each program on the machine can now read and change the indexes through the service. The error type `authentication_error` (401) is removed.
+The access key of the service is removed. Each program on the machine can now read and change the indexes through the service. The error type `authentication_error` (401) is removed.
 
 ### Upgrade steps
 
@@ -18,7 +18,7 @@ Update the service first, and then remove the key from the app. An old service r
 2. Remove `XatRag__PromptsFolder` from the environment of the service.
 3. Update each caller. Send `question` and, when needed, `chunks`. Read the `chunks` list of the response. Count the tokens of the chunks with the tokenizer of the LLM of the app.
 4. Update the code that used `rendered.messages`, `citation.grammar` or `POST /v1/citations/validate`. The app now builds these parts itself.
-5. No index rebuild is needed. The manifest key `generator_tokenizer_id` is read as `size_tokenizer_id`, and its value is the same.
+5. The manifest key `generator_tokenizer_id` is read as `size_tokenizer_id`, and its value is the same. Thus, these steps need no index rebuild. The [parser changes](#document-parsers-and-chunk-splits) need a rebuild.
 
 ### Removed routes
 
@@ -71,7 +71,7 @@ A request with a removed field gets 400.
 ### Added recipe keys
 
 - `[context]`: `chunks`, from 1 to 100. The default is 10.
-- `[context]`: `min_score`, a finite number. It has no default, so no score filter applies. A candidate with a lower score is omitted with the reason `low_score`. The RAGs of the context need a reranker. See [ADR 0017](docs/adr/0017-minimum-score-of-a-context.md).
+- `[context]`: `min_score`, a finite number. It has no default, so no score filter applies. A candidate with a lower score is omitted with the reason `low_score`. The RAGs of the context need a reranker.
 
 ### Changed behavior
 
@@ -102,7 +102,7 @@ A request with a removed field gets 400.
 
 ### Release folder and default paths
 
-- The frozen service has default paths. They are next to its executable: `data/`, `recipes/`, `models/`, `models/models.lock.json` and `data/ready.json`. A release folder starts with no path setting. See [ADR 0016](docs/adr/0016-release-folder-default-paths.md).
+- The frozen service has default paths. They are next to its executable: `data/`, `recipes/`, `models/`, `models/models.lock.json` and `data/ready.json`. A release folder starts with no path setting.
 - A path setting with an empty value uses its default. An empty `XatRag__ReadyFile` means no ready file.
 - From source, no default applies. The four path settings are required, as before.
 - The release folder has empty `data/` and `models/` folders. The models are not in the release. Extract the models archive, `xat-rag-models-<tag>.zip`, into `models/`.
@@ -122,8 +122,29 @@ A request with a removed field gets 400.
 - At start, the service creates the file `data/pdfs.sqlite`, as it does for each other RAG.
 - A user with an own recipe named `pdfs` or `ask-pdfs` in the recipes folder must check for a name conflict.
 - The default contexts `ask-docs`, `ask-pdfs` and `triage` set `min_score = -5`. See the changed behavior above.
+- A release has the default RAGs `sheets`, `web` and `word`, with the contexts `ask-sheets`, `ask-web` and `ask-word`. These contexts also set `min_score = -5`.
 
-### Added documents
+### Document parsers and chunk splits
 
-- [App guide](docs/app-guide.md): tokens, prompts, escaping, citations, the question and errors.
-- [ADR 0013](docs/adr/0013-remove-log-handling-and-exact-lookups.md) and [ADR 0014](docs/adr/0014-retrieval-only-and-app-side-fitting.md).
+- The PDF, DOCX and HTML parsers now use Docling. For these kinds, the chunk `text` is Markdown.
+- The source kind `xlsx` is new. An Excel chunk has a span of the type `cell`, with `sheet`, `row_start` and `row_end`.
+- The HTML span changes from `line` to `block`. A caller that reads HTML line numbers must change.
+- A PDF section now follows the headings of the document. The chunk kind `page` is removed.
+- The chunker splits large Markdown, text, PDF, DOCX, HTML and Excel sections at their blocks. The embedder can choose the split points. A document with more than 20000 parts gets the note `semantic_split_unit_limit`.
+- An upload that matches the stored upload gets the status `unchanged`, and it is not parsed.
+- The parse deadline of a PDF is 2 seconds for each page, if that is longer than the normal deadline.
+- A PDF that opens with an empty password is indexed.
+- A RAG with a `pdf` source needs the PDF layout models. The models archive holds them.
+- The reason `extract_error` of a skipped page is removed.
+- The notes `comments_skipped`, `headers_footers_skipped` and `tracked_insertions_kept` are removed.
+- The service no longer removes the `LANGSMITH_*` and `LANGCHAIN_*` variables.
+- In `xat-rag-core`, the modules `lc_codec` and `tracing` are removed. The modules `markdown_form` and `spans` are added.
+
+### Upgrade steps for the parsers
+
+A RAG with a Markdown, text, PDF, DOCX or HTML source returns `409 index_mismatch_error` after the upgrade.
+
+1. Rebuild each of these RAGs.
+2. Upload the documents of each RAG again.
+
+A RAG with only diff, JIRA or prompt sources needs no rebuild.

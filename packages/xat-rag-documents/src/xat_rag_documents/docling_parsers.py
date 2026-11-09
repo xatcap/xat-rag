@@ -3,7 +3,7 @@
 Docling finds the layout: headings, paragraphs, lists, tables, reading order, and page headers and footers. Each item
 becomes a `SourceBlock`, with its source position. The Markdown is rendered from the blocks. Docling's own Markdown
 export is not used, because it has no source positions. PDF files use the layout models from the models folder.
-Nothing is downloaded, and OCR is off. See ADR 0012.
+Nothing is downloaded, and OCR is off.
 """
 
 # Docling has no full type data, so the "unknown" rules are off in this one module (docs/portable/python/index.md).

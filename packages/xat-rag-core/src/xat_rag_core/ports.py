@@ -1,4 +1,4 @@
-"""The ports of xat-rag. See the architecture, section 3."""
+"""The ports of xat-rag. See "Ports and adapters" in the architecture page."""
 
 from collections.abc import Sequence
 from typing import Protocol

@@ -28,7 +28,7 @@ def _empty_versions() -> dict[str, str]:
 
 @dataclass(frozen=True, slots=True)
 class IndexManifest:
-    """The facts that decide if an index can be used. See the architecture, section 4."""
+    """The facts that decide if an index can be used. See "Index safety" in the architecture page."""
 
     rag: str
     embedder: EmbedderInfo

@@ -1,6 +1,6 @@
 """The entry point of the xat-rag service.
 
-`harden_process()` runs first, before any other xat-rag import (ADR 0011). This module
+`harden_process()` runs first, before any other xat-rag import. This module
 imports only the standard library, `xat_rag_offline` and `xat_rag_service.paths` at the top.
 """
 
@@ -24,7 +24,7 @@ def main() -> None:
     extension = str(sqlite_vec.loadable_path())  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
     suffixes = (".dylib", ".so", ".dll")
 
-    def on_block(event: str) -> None:  # The event name only, never the address or the data (ADR 0011).
+    def on_block(event: str) -> None:  # The event name only, never the address or the data.
         print(f"xat-rag: the network guard refused '{event}'.", file=sys.stderr)
 
     harden_process(data, allowed_extensions=[extension, *(extension + s for s in suffixes)], on_block=on_block)

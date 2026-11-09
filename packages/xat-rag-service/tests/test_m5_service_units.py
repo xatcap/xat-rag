@@ -468,7 +468,7 @@ def test_a_failing_document_gets_its_own_result_or_fails_the_job(error: Exceptio
         job = manager.submit("docs", documents(4))
         wait_for(lambda: finished(job))
         if isinstance(error, XatRagError):
-            # ADR 0009: one bad document does not stop the others. It gets its own failed result.
+            # One bad document does not stop the others. It gets its own failed result.
             assert job.status is JobStatus.DONE
             assert calls == ["d0", "d1", "d2", "d3"]
             assert [r.status for r in job.results] == ["created", "failed", "created", "created"]

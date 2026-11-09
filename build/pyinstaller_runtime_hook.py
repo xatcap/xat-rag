@@ -1,4 +1,4 @@
-"""PyInstaller runtime hook: harden the environment before the service code runs (ADR 0011).
+"""PyInstaller runtime hook: harden the environment before the service code runs.
 
 The hook changes only the environment. The entry point then calls `harden_process()`, which
 installs the network guard.

@@ -1,6 +1,6 @@
 """Get the model files of xat-rag at build time, and check them against `build/models.lock.json`.
 
-This is a build tool. It is never shipped, and xat-rag never downloads at runtime (ADR 0004).
+This is a build tool. It is never shipped, and xat-rag never downloads at runtime.
 
     uv run python tools/fetch_models.py                 # get and check all files
     uv run python tools/fetch_models.py --write-lock    # get the files of build/models.sources.json and write the lock

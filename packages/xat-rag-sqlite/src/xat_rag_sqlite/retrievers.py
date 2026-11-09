@@ -1,7 +1,7 @@
 """Retrievers over one SQLite file: lexical (FTS5) and dense (sqlite-vec).
 
 Each retriever gets its own query text. Ranks are 1-based and go into the scores of each candidate.
-See the architecture, section 3.
+See "Ports and adapters" in the architecture page.
 """
 
 from dataclasses import dataclass, field

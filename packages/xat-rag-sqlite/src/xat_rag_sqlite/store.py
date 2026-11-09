@@ -1,4 +1,4 @@
-"""`SqliteRagStore`: one SQLite file for each RAG. See ADR 0005.
+"""`SqliteRagStore`: one SQLite file for each RAG.
 
 The write side (upsert, delete, checkpoint) uses one connection under a lock. Each reading
 thread gets its own connection, so queries continue during ingestion (WAL mode).

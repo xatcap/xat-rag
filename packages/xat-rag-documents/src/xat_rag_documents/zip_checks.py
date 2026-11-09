@@ -1,4 +1,4 @@
-"""Checks of a zip container (DOCX or XLSX) before the parse. See ADR 0012."""
+"""Checks of a zip container (DOCX or XLSX) before the parse."""
 
 import re
 import zipfile

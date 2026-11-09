@@ -1,4 +1,4 @@
-"""Text sanitizing. It runs on the extracted text of each document, before chunking. See ADR 0010."""
+"""Text sanitizing. It runs on the extracted text of each document, before chunking."""
 
 import re
 import unicodedata

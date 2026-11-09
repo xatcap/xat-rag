@@ -72,7 +72,7 @@ def verify_model(
 
     `cache_file` keeps the result for each file, keyed by path, size, modification time and file ID,
     so that later starts do not hash the files again. A program that can write to the data folder
-    can change the cache, so the app must protect the data folder (architecture, section 14).
+    can change the cache, so the app must protect the data folder.
     `only` limits the check to the files that the runtime uses.
     """
     cache: dict[str, dict[str, Any]] = {}

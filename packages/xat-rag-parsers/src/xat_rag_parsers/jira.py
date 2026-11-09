@@ -1,6 +1,6 @@
 """`JiraParser` (`jira-v1`): a JIRA REST issue as JSON. Summary and description, then one section for each comment.
 
-Author and assignee names never go into the text. Mentions become `@user`. See ADR 0010.
+Author and assignee names never go into the text. Mentions become `@user`.
 """
 
 import json

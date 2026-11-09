@@ -1,4 +1,4 @@
-"""The public result types of the xat-rag library. They hold no LangChain types (ADR 0001)."""
+"""The public result types of the xat-rag library. They hold only xat-rag and standard types."""
 
 from collections.abc import Mapping
 from dataclasses import dataclass

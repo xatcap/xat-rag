@@ -40,7 +40,7 @@ Each error has this body:
 | `invalid_request_error` | 405 | A route is used with the wrong method. | Correct the method. |
 | `invalid_request_error` | 413 | A body is larger than its limit. | Send less data. |
 | `not_found_error` | 404 | An unknown route, RAG, document, job or context. | Correct the name. |
-| `index_mismatch_error` | 409 | The index does not match the models or the recipe. After an upgrade, a RAG with Markdown, text, PDF, DOCX or HTML sources has this error. | Rebuild the RAG and upload its documents again. |
+| `index_mismatch_error` | 409 | The index does not match the models or the recipe. | Rebuild the RAG and upload its documents again. |
 | `service_unavailable_error` | 503 | With no `Retry-After`, the service is degraded. With `Retry-After: 1`, the RAG is being rebuilt or the service is stopping. | Restart the service, or wait. |
 | `overloaded_error` | 503 | The request pool is full (`Retry-After: 1`), or the upload queue is full (`Retry-After: 5`). | Wait, and send the request again. |
 | `stage_timeout_error` | 504 | A stage passed its time limit. The message names the stage. | Send the request again, or increase the limit in the context recipe. |
@@ -268,7 +268,7 @@ The `span` has one of these forms:
 | `block` | DOCX, HTML | `block_start`, `block_end` |
 | `cell` | Excel | `sheet`, `row_start`, `row_end` |
 
-This version changes the HTML span from `line` to `block`. A caller that reads HTML line numbers must change. For a PDF, the labels are the page numbers as text, such as `"12"`. xat-rag does not read custom page labels. For DOCX and HTML, the block numbers count the items of the body in body order, from 1. The rows of an Excel span are 1-based row numbers of the sheet.
+For a PDF, the labels are the page numbers as text, such as `"12"`. xat-rag does not read custom page labels. For DOCX and HTML, the block numbers count the items of the body in body order, from 1. The rows of an Excel span are 1-based row numbers of the sheet.
 
 ## Upload format
 
@@ -442,6 +442,9 @@ from xat_rag_core.model import RawDocument, SourceKind
 | `delete(rag, doc_id)` | `bool` | Delete a document. `False` means that it was not found. |
 | `rebuild(rag)` | `None` | Delete the index and make an empty one. |
 | `retrieve(request)` | `RetrievalResult` | Return the ranked chunks of a `ContextRequest`. |
+| `search_hits(rag, query)` | `tuple[SearchHit, ...]` | Return the candidates of one RAG for a `RetrievalQuery`, with the scores of each stage. For debugging and evaluation. |
+| `search(rag, query)` | `Retrieved` | Return the internal candidates of one RAG. For evaluation. |
+| `context_recipe(context)` | `ContextRecipe` | Return the recipe of a context. |
 
 Failures raise a subclass of `XatRagError` from `xat_rag_core.errors`. The `error_type` of each subclass matches the [error types](#errors). A bad recipe or model raises `ConfigError`.
 

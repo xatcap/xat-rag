@@ -51,7 +51,7 @@ jobs:
 
   offline:
     # The service tests run again in a network namespace that has only loopback. Any connection that is
-    # not loopback fails, so this checks from outside the process that xat-rag needs no network (ADR 0011).
+    # not loopback fails, so this checks from outside the process that xat-rag needs no network.
     runs-on: ubuntu-latest
     needs: check
     timeout-minutes: 30

@@ -1,4 +1,4 @@
-"""The limits of the document parsers. See ADR 0012."""
+"""The limits of the document parsers."""
 
 from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass
@@ -37,5 +37,5 @@ def limit_exceeded(name: str) -> ParseError:
 
 
 def parse_lock(lock: AbstractContextManager[object] | None) -> AbstractContextManager[object]:
-    """Return the shared lock of binary parses, or a lock that does nothing. ADR 0012: one binary parse at a time."""
+    """Return the shared lock of binary parses, or a lock that does nothing. One binary parse at a time."""
     return lock if lock is not None else nullcontext()

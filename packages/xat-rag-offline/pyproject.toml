@@ -1,7 +1,7 @@
 [project]
 name = "xat-rag-offline"
 version = "0.1.0"
-description = "Startup hardening for the xat-rag service: tracing off, offline settings and a network guard."
+description = "Startup hardening for the xat-rag service: offline settings, removal of secrets and a network guard."
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"

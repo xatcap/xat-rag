@@ -1,6 +1,6 @@
 """The paths of the service settings, and their defaults in the frozen service.
 
-`main` uses this module before the hardening, so it imports only the standard library (ADR 0011).
+`main` uses this module before the hardening, so it imports only the standard library.
 When the service runs from source, `release` is `None` and no default applies.
 """
 

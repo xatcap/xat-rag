@@ -20,7 +20,7 @@ a = Analysis(
     datas=datas,
     hiddenimports=["uvicorn.lifespan.off", "uvicorn.protocols.http.h11_impl", "uvicorn.loops.asyncio", *hidden],
     runtime_hooks=["pyinstaller_runtime_hook.py"],
-    # Optional imports of pypdf (PIL) and the build tools.
+    # Build tools and optional imports that the service does not use.
     excludes=[
         "setuptools", "pkg_resources", "tkinter", "IPython", "matplotlib", "pytest", "mistral_common",
         "PyInstaller",

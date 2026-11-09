@@ -1,7 +1,4 @@
-"""The FastAPI app of the xat-rag service: routes, access control, limits and the error model.
-
-See the architecture, sections 9 and 11, and ADRs 0003 and 0009.
-"""
+"""The FastAPI app of the xat-rag service: routes, access control, limits and the error model."""
 
 import asyncio
 import logging
@@ -61,7 +58,7 @@ class QueryBody(_Body):
 
 
 def error_response(error: XatRagError) -> JSONResponse:
-    """Return the error body for an error. An internal error has no details (ADR 0009)."""
+    """Return the error body for an error. An internal error has no details."""
     if error.error_type is ErrorType.INTERNAL:
         LOG.error("internal error: %s", type(error).__name__)
         return _plain_error(500, ErrorType.INTERNAL, _INTERNAL_MESSAGE)
@@ -176,7 +173,7 @@ def create_app(rag: XatRag, queue_limit: int, version: str) -> FastAPI:  # noqa:
             return _plain_error(400, ErrorType.INVALID_REQUEST, "Requests from browsers are refused.")
         try:
             return await call_next(request)
-        except Exception as error:  # Only the type goes into the log, never the message (ADR 0010).
+        except Exception as error:  # Only the type goes into the log, never the message.
             LOG.error("unexpected error: %s", type(error).__name__)
             return _plain_error(500, ErrorType.INTERNAL, _INTERNAL_MESSAGE)
 

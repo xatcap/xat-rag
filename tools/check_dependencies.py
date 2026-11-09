@@ -1,4 +1,4 @@
-"""Check the runtime packages of the xat-rag service (ADR 0011).
+"""Check the runtime packages of the xat-rag service.
 
 The packages come from `uv.lock`: the closure of `xat-rag-service`, without dev groups. The check fails if:
 

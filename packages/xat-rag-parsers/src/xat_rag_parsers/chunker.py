@@ -208,7 +208,7 @@ class StructuralChunker:
         """Sanitize a section and find its atoms, once. Return `None` for a section with no text."""
         limit.check()
         # Headers and metadata can hold untrusted text (titles, summaries, commit messages), so they
-        # are sanitized here, for every parser (ADR 0010).
+        # are sanitized here, for every parser.
         section = replace(
             raw_section, header=sanitize_text(raw_section.header), metadata=sanitize_metadata(raw_section.metadata)
         )

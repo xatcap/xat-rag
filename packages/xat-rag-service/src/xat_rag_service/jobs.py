@@ -1,7 +1,7 @@
 """Ingestion jobs. Each RAG has one worker, so its jobs run in order and other RAGs are not blocked.
 
 A job can be cancelled between documents. A watchdog thread marks the service degraded when one
-document runs much longer than the parse deadline, because a Python thread cannot be stopped (ADR 0012).
+document runs much longer than the parse deadline, because a Python thread cannot be stopped.
 """
 
 import threading
@@ -112,7 +112,7 @@ class JobManager:
                 job.document_started = time.monotonic()
                 try:
                     job.results.append(self._ingest(document))
-                except XatRagError as error:  # One bad document does not stop the others (ADR 0009).
+                except XatRagError as error:  # One bad document does not stop the others.
                     job.results.append(
                         DocumentResult(
                             document.doc_id,

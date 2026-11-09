@@ -83,6 +83,19 @@ recipes/
 
 The file name must match the `name` in the recipe. The service reads the recipes when it starts, so restart it after a change.
 
+A release has these default recipes:
+
+| Context | RAGs | Source kind of each RAG |
+|---|---|---|
+| `ask-docs` | `docs` | `markdown` |
+| `ask-pdfs` | `pdfs` | `pdf` |
+| `ask-word` | `word` | `docx` |
+| `ask-web` | `web` | `html` |
+| `ask-sheets` | `sheets` | `xlsx` |
+| `triage` | `docs`, `jira`, `diffs` | `markdown`, `jira`, `diff` |
+
+At start, the service creates one SQLite file in `data/` for each RAG.
+
 ### RAG recipe
 
 ```toml
@@ -237,10 +250,6 @@ A rebuild deletes the index of the RAG and makes an empty one.
 ```bash
 curl -s -X POST "$URL/v1/rags/docs/rebuild"
 ```
-
-### Upgrade an existing index
-
-This version changes how Markdown, text, PDF, DOCX and HTML documents are split. A RAG with one of these sources returns `409 index_mismatch_error` after the upgrade. Rebuild each of these RAGs, and upload its documents again. A RAG with only diff, JIRA or prompt sources needs no rebuild.
 
 ## 6. What your app must do
 
