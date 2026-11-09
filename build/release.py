@@ -131,13 +131,7 @@ def _locked_model_names() -> list[str]:
 
 
 def _base_environment() -> dict[str, str]:
-    # Windows sets these names for each process. They name system folders, user folders and the processor count, and
-    # do not hold secrets. The native font search of the PDF parser possibly reads some of them.
-    kept = {
-        *("PATH", "HOME", "TMPDIR", "TEMP", "TMP", "SYSTEMROOT", "USERPROFILE", "APPDATA", "LOCALAPPDATA"),
-        *("WINDIR", "SYSTEMDRIVE", "PROGRAMDATA", "PROGRAMFILES", "PROGRAMFILES(X86)", "HOMEDRIVE", "HOMEPATH"),
-        *("USERNAME", "COMPUTERNAME", "NUMBER_OF_PROCESSORS"),
-    }
+    kept = {"PATH", "HOME", "TMPDIR", "TEMP", "TMP", "SYSTEMROOT", "USERPROFILE", "APPDATA", "LOCALAPPDATA"}
     env = {k: v for k, v in os.environ.items() if k.upper() in kept}
     return env | {"XatRag__StopWhenInputCloses": "true"}
 
