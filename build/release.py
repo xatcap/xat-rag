@@ -2,27 +2,34 @@
 
 uv run python build/release.py package       # build the frozen service folder with PyInstaller
 uv run python build/release.py smoke-test    # start the frozen service and check it end to end
+uv run python build/release.py archive v1.2.3          # archive the frozen folder for this platform
+uv run python build/release.py archive-models v1.2.3   # archive the locked models and the lock file
 """
 
 import json
 import os
+import platform
 import secrets
+import shutil
 import subprocess
 import sys
 import tempfile
 import time
 import urllib.error
 import urllib.request
+import zipfile
 from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
 DIST = ROOT / "build" / "out" / "dist" / "xat-rag-service"
+RELEASE = ROOT / "build" / "out" / "release"
+LOCK = ROOT / "build" / "models.lock.json"
 SETUP = ROOT / "eval" / "fixtures" / "setup"
 
 
 def package() -> None:
-    """Build the frozen folder."""
+    """Build the frozen folder, and add the default recipes to it."""
     subprocess.run(
         [
             sys.executable,
@@ -38,6 +45,7 @@ def package() -> None:
         cwd=ROOT / "build",
         check=True,
     )
+    shutil.copytree(SETUP / "recipes", DIST / "recipes")
 
 
 # Top-level modules that must never be in the frozen folder (ADR 0011 section 4).
@@ -115,7 +123,7 @@ def _call(
 
 
 def smoke_test() -> None:
-    """Start the frozen service with the fixture setup, ingest one document, and make a retrieval result."""
+    """Start the frozen service with its default recipes, ingest one document, and make a retrieval result."""
     binary = DIST / ("xat-rag-service.exe" if os.name == "nt" else "xat-rag-service")
     key = secrets.token_hex(16)
     with tempfile.TemporaryDirectory() as folder:
@@ -124,7 +132,7 @@ def smoke_test() -> None:
         env = {k: v for k, v in os.environ.items() if k.upper() in kept}
         env |= {
             "XatRag__DataFolder": str(work / "data"),
-            "XatRag__RecipesFolder": str(SETUP / "recipes"),
+            "XatRag__RecipesFolder": str(DIST / "recipes"),
             "XatRag__ModelsFolder": str(ROOT / "models"),
             "XatRag__LockFile": str(ROOT / "build" / "models.lock.json"),
             "XatRag__ReadyFile": str(work / "ready.json"),
@@ -187,5 +195,39 @@ def smoke_test() -> None:
             log.close()
 
 
+def archive(version: str) -> None:
+    """Archive the frozen folder: a zip file on Windows, and a tar file on other systems, to keep file modes."""
+    system = {"Linux": "linux", "Darwin": "macos", "Windows": "windows"}[platform.system()]
+    machine = {"x86_64": "x64", "amd64": "x64", "arm64": "arm64", "aarch64": "arm64"}[platform.machine().lower()]
+    RELEASE.mkdir(parents=True, exist_ok=True)
+    path = shutil.make_archive(
+        str(RELEASE / f"xat-rag-service-{version}-{system}-{machine}"),
+        "zip" if os.name == "nt" else "gztar",
+        root_dir=DIST.parent,
+        base_dir=DIST.name,
+    )
+    print(path)
+
+
+def archive_models(version: str) -> None:
+    """Archive the files that the lock lists, with the lock file. The contents match `XatRag__ModelsFolder`."""
+    RELEASE.mkdir(parents=True, exist_ok=True)
+    path = RELEASE / f"xat-rag-models-{version}.zip"
+    models = json.loads(LOCK.read_text())["models"]
+    names = [f"{model['id']}/{entry['path']}" for model in models for entry in model["files"]]
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as handle:
+        handle.write(LOCK, LOCK.name)
+        for name in names:
+            handle.write(ROOT / "models" / name, name)
+    print(path)
+
+
 if __name__ == "__main__":
-    {"package": package, "smoke-test": smoke_test, "check-bundle": check_bundle}[sys.argv[1]]()
+    tasks = {
+        "package": package,
+        "smoke-test": smoke_test,
+        "check-bundle": check_bundle,
+        "archive": lambda: archive(sys.argv[2]),
+        "archive-models": lambda: archive_models(sys.argv[2]),
+    }
+    tasks[sys.argv[1]]()

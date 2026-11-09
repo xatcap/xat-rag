@@ -1,9 +1,8 @@
 name: ci
 
 on:
-  push:
-    branches: [main]
   pull_request:
+  workflow_call: # The release workflow runs these jobs on the commit of the tag.
 
 permissions:
   contents: read
@@ -97,3 +96,17 @@ jobs:
       - run: uv run python build/release.py package
       - run: uv run python build/release.py check-bundle
       - run: uv run python build/release.py smoke-test
+      # Only a release keeps the frozen folder, so that it publishes the same files that the smoke test used.
+      - name: Archive the frozen folder
+        if: github.ref_type == 'tag'
+        env:
+          TAG: ${{ github.ref_name }}
+        run: uv run python build/release.py archive "$TAG"
+      - name: Keep the archive for the release job
+        if: github.ref_type == 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: service-${{ matrix.os }}
+          path: build/out/release/*
+          if-no-files-found: error
+          compression-level: 0
