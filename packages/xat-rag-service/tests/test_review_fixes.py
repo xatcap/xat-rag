@@ -18,7 +18,11 @@ from xat_rag_core.errors import ConfigError, InvalidRequestError
 from xat_rag_service.app import create_app
 from xat_rag_service.uploads import read_upload
 
-pytestmark = pytest.mark.skipif(not (MODELS / "bge-small-en-v1.5" / "model.onnx").exists(), reason="models not fetched")
+pytestmark = [
+    pytest.mark.skipif(not (MODELS / "bge-small-en-v1.5" / "model.onnx").exists(), reason="models not fetched"),
+    # On Windows, the event loop of the test client makes its internal socket pair over loopback.
+    pytest.mark.allow_hosts(["127.0.0.1"]),
+]
 AUTH = {"Authorization": f"Bearer {KEY}"}
 
 

@@ -1,7 +1,6 @@
 """Start the real service in a child process, with the hardening, and call it over loopback."""
 
 import json
-import os
 import subprocess
 import sys
 import time
@@ -10,7 +9,7 @@ import urllib.request
 from pathlib import Path
 
 import pytest
-from service_setup import KEY, MODELS, write_setup
+from service_setup import KEY, MODELS, kept_environment, write_setup
 
 pytestmark = [
     pytest.mark.skipif(not (MODELS / "bge-small-en-v1.5" / "model.onnx").exists(), reason="models not fetched"),
@@ -29,7 +28,7 @@ def _get(url: str, path: str, key: str | None = KEY) -> tuple[int, dict[str, obj
 
 def test_service_starts_hardened_and_stops_when_input_closes(tmp_path: Path) -> None:
     env = {
-        **{k: v for k, v in os.environ.items() if k in {"PATH", "HOME", "TMPDIR", "SYSTEMROOT"}},
+        **kept_environment(),
         **write_setup(tmp_path),
         "XatRag__Urls": "http://127.0.0.1:0",
         "XatRag__ReadyFile": str(tmp_path / "ready.json"),
@@ -55,7 +54,8 @@ def test_service_starts_hardened_and_stops_when_input_closes(tmp_path: Path) -> 
         info = json.loads(ready.read_text())
         url = info["url"]
         assert url.startswith("http://127.0.0.1:")
-        assert info["pid"] == service.pid
+        if sys.platform != "win32":  # On Windows, the Python of a virtual environment starts a second process.
+            assert info["pid"] == service.pid
         assert _get(url, "/health/live", key=None)[0] == 200
         assert _get(url, "/v1/rags", key="wrong")[0] == 401
         status, body = _get(url, "/health/ready")

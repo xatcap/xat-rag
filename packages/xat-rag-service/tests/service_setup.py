@@ -1,5 +1,6 @@
 """A small setup of recipes for the service tests."""
 
+import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -24,6 +25,12 @@ name = "ask"
 [[context.sources]]
 rag = "docs"
 """
+
+
+def kept_environment() -> dict[str, str]:
+    """Return the variables that a child process needs. Python on Windows needs more of them."""
+    names = {"PATH", "HOME", "TMPDIR", "SYSTEMROOT", "TEMP", "TMP", "USERPROFILE", "APPDATA", "LOCALAPPDATA"}
+    return {name: value for name, value in os.environ.items() if name in names}
 
 
 def write_setup(folder: Path) -> dict[str, str]:

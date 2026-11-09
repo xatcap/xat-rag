@@ -7,6 +7,9 @@ dependencies = []
 
 [tool.uv]
 package = false
+# Use only the Python builds that uv manages. Some system builds cannot load SQLite extensions,
+# and the vector search needs them (ADR 0002).
+python-preference = "only-managed"
 
 [tool.uv.workspace]
 members = ["packages/*"]

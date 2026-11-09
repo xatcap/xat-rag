@@ -2,7 +2,6 @@
 
 import http.client
 import json
-import os
 import shutil
 import socket
 import subprocess
@@ -13,7 +12,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from service_setup import KEY, MODELS, write_setup
+from service_setup import KEY, MODELS, kept_environment, write_setup
 
 pytestmark = [
     pytest.mark.skipif(not (MODELS / "bge-small-en-v1.5" / "model.onnx").exists(), reason="models not fetched"),
@@ -36,8 +35,7 @@ class UnixConnection(http.client.HTTPConnection):
 
 
 def base_env(folder: Path) -> dict[str, str]:
-    kept = {k: v for k, v in os.environ.items() if k in {"PATH", "HOME", "TMPDIR", "SYSTEMROOT"}}
-    return {**kept, **write_setup(folder)}
+    return {**kept_environment(), **write_setup(folder)}
 
 
 def run_once(env: dict[str, str]) -> subprocess.CompletedProcess[bytes]:

@@ -4,7 +4,7 @@ This page describes how to set up xat-rag, and how to build, test, evaluate, pac
 
 ## Setup
 
-xat-rag uses [uv](https://docs.astral.sh/uv/) and a workspace of packages. The Python version is in `.python-version` (3.13). The code needs Python 3.12 or later.
+xat-rag uses [uv](https://docs.astral.sh/uv/) and a workspace of packages. The Python version is in `.python-version` (3.13). The code needs Python 3.12 or later. The Python build must be able to load SQLite extensions. For this reason, uv uses only the Python builds that it manages. The setting is `python-preference` in `pyproject.toml`. If you made your `.venv` with a system Python, delete it and run `uv sync --locked` again.
 
 1. Install the locked dependencies:
 

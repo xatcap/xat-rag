@@ -32,6 +32,10 @@ _CHILD = textwrap.dedent(
         result["dlopen_none"] = "allowed"
     except BlockedOperationError:
         result["dlopen_none"] = "blocked"
+    except TypeError:  # On Windows, ctypes refuses None before the guard sees it.
+        if os.name != "nt":
+            raise
+        result["dlopen_none"] = "allowed"
     try:
         import ctypes
         ctypes.CDLL("libother.so")
@@ -45,7 +49,8 @@ _CHILD = textwrap.dedent(
 
 
 def _run(data_folder: str, env: dict[str, str]) -> dict[str, object]:
-    base = {key: value for key, value in os.environ.items() if key.upper().startswith(("PATH", "VIRTUAL_ENV", "HOME"))}
+    kept = ("PATH", "VIRTUAL_ENV", "HOME", "SYSTEMROOT")
+    base = {key: value for key, value in os.environ.items() if key.upper().startswith(kept)}
     result = subprocess.run(
         [sys.executable, "-c", _CHILD, data_folder],
         capture_output=True,

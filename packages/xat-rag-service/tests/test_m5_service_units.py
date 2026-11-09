@@ -698,6 +698,8 @@ def test_shutdown_gives_up_after_its_timeout() -> None:
 # The limiter and the errors.
 
 
+# On Windows, the event loop makes its internal socket pair over loopback.
+@pytest.mark.allow_hosts(["127.0.0.1"])
 def test_the_limiter_refuses_work_over_its_limit_and_frees_the_slot() -> None:
     async def scenario() -> None:
         limiter = Limiter(queue_limit=2, workers=2)
@@ -726,6 +728,8 @@ def test_the_limiter_refuses_work_over_its_limit_and_frees_the_slot() -> None:
     asyncio.run(scenario())
 
 
+# On Windows, the event loop makes its internal socket pair over loopback.
+@pytest.mark.allow_hosts(["127.0.0.1"])
 def test_the_limiter_frees_the_slot_when_the_work_fails() -> None:
     async def scenario() -> None:
         limiter = Limiter(queue_limit=1)
