@@ -138,7 +138,7 @@ The runtime hook `build/pyinstaller_runtime_hook.py` runs before `main`. It call
 
 The workflow is `.github/workflows/ci.yml`. It runs on each push to `main` and on each pull request. All jobs use the bash shell. The jobs install with `uv sync --locked`. The model files are cached with the key of `build/models.lock.json`.
 
-The `check` job runs on Ubuntu, macOS 14 and Windows, with a timeout of 45 minutes:
+The `check` job runs on Ubuntu, macOS 15 and Windows, with a timeout of 45 minutes:
 
 1. `uv sync --locked` and `tools/fetch_models.py`.
 2. `ruff check` and `ruff format --check` on `packages`, `tools` and `build`.
@@ -150,7 +150,7 @@ The `check` job runs on Ubuntu, macOS 14 and Windows, with a timeout of 45 minut
 
 The `offline` job runs on Ubuntu after `check`, with a timeout of 30 minutes. It runs the service and library tests in a new network namespace (`sudo unshare --net`). The job brings the loopback interface up, so the tests can use loopback only. It sets `LANGSMITH_TRACING`, `LANGSMITH_API_KEY` and `LANGSMITH_RUNS_ENDPOINTS`. A connection outside loopback fails in this job. The job uses no packet capture yet.
 
-The `package` job runs on Ubuntu, macOS 14 and Windows after `check`, with a timeout of 45 minutes. It runs `package`, then `check-bundle`, then `smoke-test`.
+The `package` job runs on Ubuntu, macOS 15 and Windows after `check`, with a timeout of 45 minutes. It runs `package`, then `check-bundle`, then `smoke-test`.
 
 ## Adding a document kind or a model
 

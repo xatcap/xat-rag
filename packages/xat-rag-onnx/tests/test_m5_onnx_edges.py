@@ -208,13 +208,14 @@ def test_embedding_no_texts_gives_an_empty_matrix(embedder: OnnxEmbeddings) -> N
 @needs_models
 def test_embedding_is_close_for_any_batch_composition(bge: OnnxModel) -> None:
     # The locked models are int8 models. Their activation scales depend on the whole batch, so the numbers
-    # differ a little (cosine about 0.999) between a batch and a single text. The meaning must stay the same.
+    # differ a little between a batch and a single text. The cosine is about 0.98 to 0.999 and changes with the CPU.
+    # The limit is above the 0.95 near-duplicate threshold (DEFAULT_NEAR_DUPLICATE in mmr.py).
     texts = ["short", "a much longer text " * 30, "mid sized text about the orders service", "x"]
     single = OnnxEmbeddings(bge, "bge-small-en-v1.5", 384, batch_size=1).embed_documents_np(texts)
     batched = OnnxEmbeddings(bge, "bge-small-en-v1.5", 384, batch_size=32).embed_documents_np(texts)
     alone = np.stack([OnnxEmbeddings(bge, "bge-small-en-v1.5", 384).embed_documents_np([t])[0] for t in texts])
     assert np.array_equal(single, alone)  # Same batch composition, same bits.
-    assert (np.sum(single * batched, axis=1) > 0.99).all()
+    assert (np.sum(single * batched, axis=1) > 0.97).all()
 
 
 @needs_models

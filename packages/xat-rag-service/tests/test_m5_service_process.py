@@ -29,6 +29,7 @@ class UnixConnection(http.client.HTTPConnection):
         self._path = path
 
     def connect(self) -> None:
+        assert sys.platform != "win32"  # Windows has no AF_UNIX. This line also tells pyright the platform.
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.sock.settimeout(30)
         self.sock.connect(self._path)
@@ -53,6 +54,7 @@ def short_folder() -> Iterator[Path]:
     shutil.rmtree(folder, ignore_errors=True)
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Unix sockets")
 def test_the_service_listens_on_a_unix_socket(tmp_path: Path, short_folder: Path) -> None:
     socket_path = short_folder / "s.sock"
     ready = tmp_path / "ready.json"

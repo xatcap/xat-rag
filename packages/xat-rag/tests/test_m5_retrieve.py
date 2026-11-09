@@ -41,6 +41,10 @@ CONTEXT = """
 name = "{name}"
 {chunks}
 {sources}
+
+# The tests use one thread on slow CI machines. These tests do not measure the time limit of the rerank stage.
+[limits]
+rerank = 30000
 """
 
 WORDS = [
