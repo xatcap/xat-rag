@@ -36,7 +36,8 @@ class DiffParser:
     def parse(self, raw: RawDocument, deadline: Deadline) -> ParsedDocument:
         """Parse the document."""
         # Sanitizing runs after unidiff, on each hunk. Before, it could change line breaks and break the hunk counts.
-        text = decode_text(raw.data)
+        # CRLF is the exception: unidiff keeps the "\r" in the file path, so it is changed to LF first.
+        text = decode_text(raw.data).replace("\r\n", "\n")
         try:
             patch = PatchSet.from_string(text)
         except UnidiffParseError as error:
