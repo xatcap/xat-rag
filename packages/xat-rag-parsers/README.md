@@ -12,7 +12,7 @@ Text parsers and the structural chunker of xat-rag. See [how it works, step 5](.
 
 `StructuralChunker` turns sections into chunks. A section that is larger than `max_chunk_tokens` (in size ruler tokens) or than the embedder input is split again. The chunker counts with both token counters, and the size limits always win.
 
-Sections of the kinds `markdown`, `text`, `pdf`, `docx`, `html` and `xlsx` split by their blocks. The split goes to list items and lines, then to sentences, words and characters. Tables that fit stay whole, and large tables split at their rows with the header repeated. The module `block_splitter` holds this split. It can also use the embedder to cut where the topic changes.
+Sections of the kinds `markdown`, `text`, `pdf`, `docx`, `html` and `xlsx` split by their blocks. The split goes to list items and lines, then to sentences, words and characters. Tables that fit stay whole, and large tables split at their rows with the header repeated. The module `block_splitter` holds this split. It can also use the embedder to cut where the topic changes. See [how the split points are chosen](../../docs/how-it-works.md#choose-the-split-points-by-topic).
 
 Diff, JIRA and prompt sections use a recursive split on separators. A prompt section is never split. The chunker also sanitizes the headers and the metadata of each section.
 

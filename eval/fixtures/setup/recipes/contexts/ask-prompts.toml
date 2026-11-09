@@ -1,0 +1,6 @@
+[context]
+name = "ask-prompts"
+min_score = -5
+
+[[context.sources]]
+rag = "prompts"

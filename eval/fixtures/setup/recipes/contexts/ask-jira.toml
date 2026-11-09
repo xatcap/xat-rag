@@ -1,0 +1,6 @@
+[context]
+name = "ask-jira"
+min_score = -5
+
+[[context.sources]]
+rag = "jira"

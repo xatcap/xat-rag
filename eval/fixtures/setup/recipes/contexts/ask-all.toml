@@ -1,0 +1,6 @@
+[context]
+name = "ask-all"
+min_score = -5
+
+[[context.sources]]
+rag = "all"

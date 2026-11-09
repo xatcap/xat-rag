@@ -92,6 +92,11 @@ A release has these default recipes:
 | `ask-word` | `word` | `docx` |
 | `ask-web` | `web` | `html` |
 | `ask-sheets` | `sheets` | `xlsx` |
+| `ask-text` | `text` | `text` |
+| `ask-prompts` | `prompts` | `prompt` |
+| `ask-jira` | `jira` | `jira` |
+| `ask-diffs` | `diffs` | `diff` |
+| `ask-all` | `all` | All nine kinds in one RAG |
 | `triage` | `docs`, `jira`, `diffs` | `markdown`, `jira`, `diff` |
 
 At start, the service creates one SQLite file in `data/` for each RAG.

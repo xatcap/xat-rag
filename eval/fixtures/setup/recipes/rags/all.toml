@@ -1,0 +1,43 @@
+[rag]
+name = "all"
+embedder = "bge-small-en-v1.5"
+reranker = "ms-marco-minilm-l6-v2"
+
+[sources.markdown]
+kind = "markdown"
+max_chunk_tokens = 350
+
+[sources.text]
+kind = "text"
+max_chunk_tokens = 350
+
+[sources.diff]
+kind = "diff"
+max_chunk_tokens = 350
+
+[sources.jira]
+kind = "jira"
+max_chunk_tokens = 350
+
+[sources.prompt]
+kind = "prompt"
+max_chunk_tokens = 350
+
+[sources.pdf]
+kind = "pdf"
+max_chunk_tokens = 120
+
+[sources.docx]
+kind = "docx"
+max_chunk_tokens = 120
+
+[sources.html]
+kind = "html"
+max_chunk_tokens = 120
+
+[sources.xlsx]
+kind = "xlsx"
+max_chunk_tokens = 120
+
+[retrieval]
+keep = 6

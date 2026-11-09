@@ -123,6 +123,12 @@ A request with a removed field gets 400.
 - A user with an own recipe named `pdfs` or `ask-pdfs` in the recipes folder must check for a name conflict.
 - The default contexts `ask-docs`, `ask-pdfs` and `triage` set `min_score = -5`. See the changed behavior above.
 - A release has the default RAGs `sheets`, `web` and `word`, with the contexts `ask-sheets`, `ask-web` and `ask-word`. These contexts also set `min_score = -5`.
+- A release has the default RAGs `text` and `prompts`, with the contexts `ask-text` and `ask-prompts`. Each source kind has a default RAG.
+- A release has the default contexts `ask-jira` and `ask-diffs`. `ask-jira` searches only `jira`, and `ask-diffs` searches only `diffs`.
+- A release has the default RAG `all`, which accepts all nine source kinds, and the default context `ask-all`, which searches only `all`.
+- The contexts `ask-text`, `ask-prompts`, `ask-jira`, `ask-diffs` and `ask-all` also set `min_score = -5`.
+- At start, the service creates the files `data/text.sqlite`, `data/prompts.sqlite` and `data/all.sqlite`.
+- A user with an own RAG recipe named `text`, `prompts` or `all`, or an own context recipe named `ask-text`, `ask-prompts`, `ask-jira`, `ask-diffs` or `ask-all`, must check for a name conflict.
 
 ### Document parsers and chunk splits
 

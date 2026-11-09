@@ -1,0 +1,6 @@
+[context]
+name = "ask-text"
+min_score = -5
+
+[[context.sources]]
+rag = "text"

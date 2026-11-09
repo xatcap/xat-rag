@@ -3,10 +3,11 @@
 import json
 from collections.abc import Iterator
 from pathlib import Path
+from typing import get_args
 
 import pytest
 from xat_rag import ContextRequest, Settings, XatRag
-from xat_rag.recipes import load_recipes
+from xat_rag.recipes import SourceKindName, load_recipes
 from xat_rag_eval.corpus import load_corpus
 from xat_rag_eval.harness import Case, Relevant, gate, load_golden, report_json, run
 
@@ -17,6 +18,17 @@ SETUP = ROOT / "eval" / "fixtures" / "setup"
 GOLDEN = ROOT / "eval" / "fixtures" / "golden.jsonl"
 BASELINE = ROOT / "eval" / "baseline.json"
 needs_models = pytest.mark.skipif(not (MODELS / "bge-small-en-v1.5" / "model.onnx").exists(), reason="no models")
+RAG_OF_KIND = {
+    "markdown": "docs",
+    "text": "text",
+    "diff": "diffs",
+    "jira": "jira",
+    "prompt": "prompts",
+    "pdf": "pdfs",
+    "docx": "word",
+    "html": "web",
+    "xlsx": "sheets",
+}
 
 
 def test_the_golden_set_is_valid_and_uses_the_contexts_and_rags_of_the_fixture_recipes() -> None:
@@ -42,6 +54,26 @@ def test_the_fixture_recipes_use_the_retrieval_only_keys() -> None:
     assert not (SETUP / "prompts").exists()
     for recipe in contexts.values():
         assert 1 <= recipe.context.chunks <= 100
+
+
+def test_each_source_kind_has_a_default_rag_and_a_context_that_searches_only_that_rag() -> None:
+    rags, contexts = load_recipes(SETUP / "recipes")
+    assert set(get_args(SourceKindName)) == set(RAG_OF_KIND)
+    for kind, name in RAG_OF_KIND.items():
+        assert [source.kind for source in rags[name].sources.values()] == [kind]
+        assert [source.rag for source in contexts[f"ask-{name}"].context.sources] == [name]
+
+
+def test_the_all_rag_has_each_source_kind_and_ask_all_searches_only_it() -> None:
+    rags, contexts = load_recipes(SETUP / "recipes")
+    assert {source.kind for source in rags["all"].sources.values()} == set(get_args(SourceKindName))
+    assert [source.rag for source in contexts["ask-all"].context.sources] == ["all"]
+
+
+def test_the_all_rag_splits_each_kind_as_its_single_kind_rag_does() -> None:
+    rags, _ = load_recipes(SETUP / "recipes")
+    for kind, name in RAG_OF_KIND.items():
+        assert rags["all"].source_for(kind) == rags[name].source_for(kind), kind
 
 
 def test_every_kind_of_the_golden_set_is_in_the_baseline_with_the_final_metrics() -> None:
@@ -82,7 +114,7 @@ def test_a_run_on_the_fixture_corpus_has_no_violations_and_passes_its_own_baseli
 
 @needs_models
 def test_a_case_for_a_document_that_is_in_the_corpus_is_found_in_the_final_list(rag: XatRag) -> None:
-    recipe_context = next(iter(load_recipes(SETUP / "recipes")[1].values()))
+    recipe_context = load_recipes(SETUP / "recipes")[1]["ask-docs"]
     rag_name = recipe_context.context.sources[0].rag
     document = next(document for document in load_corpus(SETUP / "documents") if document.rag == rag_name)
     text = document.data.decode("utf-8", "replace")

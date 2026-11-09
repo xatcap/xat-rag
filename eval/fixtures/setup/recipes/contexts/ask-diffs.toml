@@ -1,0 +1,6 @@
+[context]
+name = "ask-diffs"
+min_score = -5
+
+[[context.sources]]
+rag = "diffs"
