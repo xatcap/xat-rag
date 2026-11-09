@@ -13,7 +13,6 @@ class ErrorType(StrEnum):
     """The `type` field of an error body."""
 
     INVALID_REQUEST = "invalid_request_error"
-    AUTHENTICATION = "authentication_error"
     NOT_FOUND = "not_found_error"
     INDEX_MISMATCH = "index_mismatch_error"
     SERVICE_UNAVAILABLE = "service_unavailable_error"
@@ -26,7 +25,6 @@ class ErrorType(StrEnum):
 HTTP_STATUS: Mapping[ErrorType, int] = MappingProxyType(
     {
         ErrorType.INVALID_REQUEST: 400,
-        ErrorType.AUTHENTICATION: 401,
         ErrorType.NOT_FOUND: 404,
         ErrorType.INDEX_MISMATCH: 409,
         ErrorType.SERVICE_UNAVAILABLE: 503,
@@ -75,12 +73,6 @@ class InvalidRequestError(XatRagError):
 
 class ConfigError(InvalidRequestError):
     """A setting or a recipe is not valid. At startup, the process stops with this message."""
-
-
-class AuthenticationError(XatRagError):
-    """The access key is missing or wrong."""
-
-    error_type = ErrorType.AUTHENTICATION
 
 
 class NotFoundError(XatRagError):

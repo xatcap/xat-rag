@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from pypdf import PdfWriter
-from service_setup import KEY, MODELS, multipart, write_setup
+from service_setup import MODELS, multipart, write_setup
 from xat_rag import Settings, XatRag
 from xat_rag_service.app import create_app
 
@@ -15,8 +15,9 @@ pytestmark = [
     # On Windows, the event loop of the test client makes its internal socket pair over loopback.
     pytest.mark.allow_hosts(["127.0.0.1"]),
 ]
-AUTH = {"Authorization": f"Bearer {KEY}"}
 DOC = b"# Handbook\n\n## Orders\n\nThe orders service runs on port 8080.\n\n## Food\n\nPasta on Friday.\n"
+HOST_MESSAGE = "The Host header must be a loopback name."
+ORIGIN_MESSAGE = "Requests from browsers are refused."
 
 
 @pytest.fixture(scope="module")
@@ -32,12 +33,12 @@ def client(tmp_path_factory: pytest.TempPathFactory) -> TestClient:
             threads=1,
         )
     )
-    return TestClient(create_app(rag, KEY, queue_limit=4, version="test"), base_url="http://127.0.0.1")
+    return TestClient(create_app(rag, queue_limit=4, version="test"), base_url="http://127.0.0.1")
 
 
 def _wait(client: TestClient, job_id: str) -> dict[str, object]:
     for _ in range(200):
-        job = client.get(f"/v1/jobs/{job_id}", headers=AUTH).json()
+        job = client.get(f"/v1/jobs/{job_id}").json()
         if job["status"] in {"done", "failed", "cancelled"}:
             return job
         time.sleep(0.05)
@@ -46,15 +47,44 @@ def _wait(client: TestClient, job_id: str) -> dict[str, object]:
 
 def test_access_control(client: TestClient) -> None:
     assert client.get("/health/live").status_code == 200
-    response = client.get("/v1/rags")
-    assert response.status_code == 401
-    assert response.json() == {
-        "error": {"message": "The access key is missing or wrong.", "type": "authentication_error"}
-    }
-    assert client.get("/v1/rags", headers={"Authorization": "Bearer wrong"}).status_code == 401
-    assert client.get("/v1/rags", headers={**AUTH, "Host": "evil.example"}).status_code == 400
-    assert client.get("/v1/rags", headers={**AUTH, "Origin": "http://evil.example"}).status_code == 400
-    assert client.get("/v1/rags", headers=AUTH).status_code == 200
+    assert client.get("/v1/rags").status_code == 200
+    # A client that still sends a key is not refused.
+    assert client.get("/v1/rags", headers={"Authorization": "Bearer x"}).status_code == 200
+    assert client.get("/v1/rags", headers={"Host": "evil.example"}).status_code == 400
+    assert client.get("/v1/rags", headers={"Origin": "http://evil.example"}).status_code == 400
+
+
+def test_bad_host_with_origin_returns_the_host_message(client: TestClient) -> None:
+    response = client.get("/v1/rags", headers={"Host": "evil.example", "Origin": "http://evil.example"})
+    assert response.status_code == 400
+    assert response.json() == {"error": {"message": HOST_MESSAGE, "type": "invalid_request_error"}}
+
+
+def test_origin_is_refused_on_every_route_without_authorization(client: TestClient) -> None:
+    headers = {"Origin": "http://evil.example"}
+    expected = {"error": {"message": ORIGIN_MESSAGE, "type": "invalid_request_error"}}
+    responses = [
+        client.get("/v1/rags", headers=headers),
+        client.get("/v1/rags/docs", headers=headers),
+        client.get("/v1/jobs/none", headers=headers),
+        client.post("/v1/context", json={"context": "ask", "question": "q"}, headers=headers),
+        client.post("/v1/query/build", json={"question": "q"}, headers=headers),
+        client.post("/v1/rags/docs/search", json={"question": "q"}, headers=headers),
+        client.put("/v1/rags/docs/documents", content=b"", headers=headers),
+        client.delete("/v1/rags/docs/documents/x", headers=headers),
+        client.post("/v1/rags/docs/rebuild", headers=headers),
+        client.get("/v1/nothing", headers=headers),
+    ]
+    for response in responses:
+        assert response.status_code == 400
+        assert response.json() == expected
+
+
+def test_health_live_passes_host_and_origin_checks(client: TestClient) -> None:
+    assert client.get("/health/live").json() == {"status": "live"}
+    assert client.get("/health/live", headers={"Host": "evil.example"}).status_code == 400
+    assert client.get("/health/live", headers={"Origin": "http://evil.example"}).status_code == 400
+    assert client.get("/health/live", headers={"Host": "localhost:8080"}).status_code == 200
 
 
 def test_ingest_and_context(client: TestClient) -> None:
@@ -72,13 +102,13 @@ def test_ingest_and_context(client: TestClient) -> None:
         ]
     )
     body, content_type = multipart(fields, {"f1": DOC})
-    response = client.put("/v1/rags/docs/documents", content=body, headers={**AUTH, "Content-Type": content_type})
+    response = client.put("/v1/rags/docs/documents", content=body, headers={"Content-Type": content_type})
     assert response.status_code == 202, response.text
     job = _wait(client, response.json()["job_id"])
     assert job["status"] == "done"
     assert job["results"][0]["status"] == "created"  # type: ignore[index]
 
-    result = client.post("/v1/context", json={"context": "ask", "question": "Which port do orders use?"}, headers=AUTH)
+    result = client.post("/v1/context", json={"context": "ask", "question": "Which port do orders use?"})
     assert result.status_code == 200, result.text
     data = result.json()
     assert set(data) == {"chunks", "omitted", "debug"}
@@ -94,34 +124,32 @@ def test_ingest_and_context(client: TestClient) -> None:
 
 def test_errors_do_not_echo_input(client: TestClient) -> None:
     secret = "SECRET-INPUT-VALUE"
-    response = client.post("/v1/context", json={"context": "ask", "question": 5, "x": secret}, headers=AUTH)
+    response = client.post("/v1/context", json={"context": "ask", "question": 5, "x": secret})
     assert response.status_code == 400
     assert secret not in response.text
     assert response.json()["error"]["type"] == "invalid_request_error"
-    assert client.post("/v1/context", json={"context": "missing", "question": "q"}, headers=AUTH).status_code == 404
-    assert client.get("/v1/nothing", headers=AUTH).json()["error"]["type"] == "not_found_error"
-    big = client.post(
-        "/v1/context", content=b"x" * (2 * 1024 * 1024), headers={**AUTH, "Content-Type": "application/json"}
-    )
+    assert client.post("/v1/context", json={"context": "missing", "question": "q"}).status_code == 404
+    assert client.get("/v1/nothing").json()["error"]["type"] == "not_found_error"
+    big = client.post("/v1/context", content=b"x" * (2 * 1024 * 1024), headers={"Content-Type": "application/json"})
     assert big.status_code == 413
 
 
 def test_query_build_and_delete(client: TestClient) -> None:
-    query = client.post("/v1/query/build", json={"question": "ERROR PROJ-7 failed in OrderService.find"}, headers=AUTH)
+    query = client.post("/v1/query/build", json={"question": "ERROR PROJ-7 failed in OrderService.find"})
     assert query.status_code == 200
     data = query.json()
     assert set(data) == {"lexical_terms", "dense_text", "rerank_text"}
     assert "PROJ-7" in data["lexical_terms"]
     assert "OrderService.find" in data["lexical_terms"]
     assert data["dense_text"] == "ERROR PROJ-7 failed in OrderService.find"
-    old = client.post("/v1/query/build", json={"builder": "log-v1", "log_lines": ["ERROR PROJ-7 failed"]}, headers=AUTH)
+    old = client.post("/v1/query/build", json={"builder": "log-v1", "log_lines": ["ERROR PROJ-7 failed"]})
     assert old.status_code == 400
     fields = json.dumps([{"doc_id": "docs:tmp/a b.md", "kind": "markdown", "part": "f", "uri": ""}])
     body, content_type = multipart(fields, {"f": b"# T\n\ntemp"})
-    job = client.put("/v1/rags/docs/documents", content=body, headers={**AUTH, "Content-Type": content_type}).json()
+    job = client.put("/v1/rags/docs/documents", content=body, headers={"Content-Type": content_type}).json()
     _wait(client, job["job_id"])
-    assert client.delete("/v1/rags/docs/documents/docs%3Atmp%2Fa%20b.md", headers=AUTH).json() == {"deleted": True}
-    assert client.delete("/v1/rags/docs/documents/docs%3Atmp%2Fa%20b.md", headers=AUTH).status_code == 404
+    assert client.delete("/v1/rags/docs/documents/docs%3Atmp%2Fa%20b.md").json() == {"deleted": True}
+    assert client.delete("/v1/rags/docs/documents/docs%3Atmp%2Fa%20b.md").status_code == 404
 
 
 def test_scanned_pdf_report_in_job(client: TestClient) -> None:
@@ -133,9 +161,7 @@ def test_scanned_pdf_report_in_job(client: TestClient) -> None:
     body, content_type = multipart(fields, {"p": buffer.getvalue()})
     job = _wait(
         client,
-        client.put("/v1/rags/manuals/documents", content=body, headers={**AUTH, "Content-Type": content_type}).json()[
-            "job_id"
-        ],
+        client.put("/v1/rags/manuals/documents", content=body, headers={"Content-Type": content_type}).json()["job_id"],
     )
     result = job["results"][0]  # type: ignore[index]
     assert result["status"] == "failed"

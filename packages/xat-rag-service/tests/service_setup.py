@@ -6,7 +6,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 MODELS = ROOT / "models"
 LOCK = ROOT / "build" / "models.lock.json"
-KEY = "test-access-key-0123456789"
 
 RAG = """
 [rag]
@@ -45,7 +44,6 @@ def write_setup(folder: Path) -> dict[str, str]:
         "XatRag__RecipesFolder": str(folder / "recipes"),
         "XatRag__ModelsFolder": str(MODELS),
         "XatRag__LockFile": str(LOCK),
-        "XatRag__AccessKey": KEY,
         "XatRag__Threads": "1",
     }
 

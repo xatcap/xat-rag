@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from service_setup import KEY, MODELS, multipart, write_setup
+from service_setup import MODELS, multipart, write_setup
 from xat_rag import Settings, XatRag
 from xat_rag_core.errors import ConfigError, InvalidRequestError
 from xat_rag_service.app import create_app
@@ -23,7 +23,6 @@ pytestmark = [
     # On Windows, the event loop of the test client makes its internal socket pair over loopback.
     pytest.mark.allow_hosts(["127.0.0.1"]),
 ]
-AUTH = {"Authorization": f"Bearer {KEY}"}
 
 
 def _settings(env: dict[str, str]) -> Settings:
@@ -39,9 +38,7 @@ def _settings(env: dict[str, str]) -> Settings:
 @pytest.fixture(scope="module")
 def client(tmp_path_factory: pytest.TempPathFactory) -> TestClient:
     env = write_setup(tmp_path_factory.mktemp("review"))
-    return TestClient(
-        create_app(XatRag.open(_settings(env)), KEY, queue_limit=4, version="t"), base_url="http://127.0.0.1"
-    )
+    return TestClient(create_app(XatRag.open(_settings(env)), queue_limit=4, version="t"), base_url="http://127.0.0.1")
 
 
 def test_upload_parser_limits_and_shape() -> None:
@@ -59,38 +56,38 @@ def test_upload_parser_limits_and_shape() -> None:
 
 def test_long_questions_are_not_cut_and_never_a_500(client: TestClient) -> None:
     for question in ("0x" + "deadbeef" * 300, "設定" * 900, "com.shop.Order$Inner.find(" * 70):
-        response = client.post("/v1/context", json={"context": "ask", "question": question[:20000]}, headers=AUTH)
+        response = client.post("/v1/context", json={"context": "ask", "question": question[:20000]})
         assert response.status_code == 200, response.text
-    longest = client.post("/v1/context", json={"context": "ask", "question": "設" * 20000}, headers=AUTH)
+    longest = client.post("/v1/context", json={"context": "ask", "question": "設" * 20000})
     assert longest.status_code == 200, longest.text
-    too_long = client.post("/v1/context", json={"context": "ask", "question": "設" * 20001}, headers=AUTH)
+    too_long = client.post("/v1/context", json={"context": "ask", "question": "設" * 20001})
     assert too_long.status_code == 400, too_long.text
 
 
 def test_unknown_field_names_are_not_echoed(client: TestClient) -> None:
-    response = client.post("/v1/context", json={"context": "ask", "question": "q", "zzSECRETkey": 1}, headers=AUTH)
+    response = client.post("/v1/context", json={"context": "ask", "question": "q", "zzSECRETkey": 1})
     assert response.status_code == 400
     assert "zzSECRETkey" not in response.text
     assert "unknown field" in response.text
-    assert "zz-job" not in client.get("/v1/jobs/zz-job", headers=AUTH).text
+    assert "zz-job" not in client.get("/v1/jobs/zz-job").text
 
 
 def test_host_check_ignores_case(client: TestClient) -> None:
-    assert client.get("/v1/rags", headers={**AUTH, "Host": "LOCALHOST:1"}).status_code == 200
+    assert client.get("/v1/rags", headers={"Host": "LOCALHOST:1"}).status_code == 200
 
 
 def test_rebuild_is_refused_while_a_job_runs(client: TestClient) -> None:
     fields = json.dumps([{"doc_id": f"docs:{i}.md", "kind": "markdown", "part": f"f{i}"} for i in range(30)])
     body, content_type = multipart(fields, {f"f{i}": f"# T{i}\n\n{'word ' * 300}".encode() for i in range(30)})
-    job = client.put("/v1/rags/docs/documents", content=body, headers={**AUTH, "Content-Type": content_type}).json()
-    response = client.post("/v1/rags/docs/rebuild", headers=AUTH)
+    job = client.put("/v1/rags/docs/documents", content=body, headers={"Content-Type": content_type}).json()
+    response = client.post("/v1/rags/docs/rebuild")
     assert response.status_code == 400
     assert "job" in response.json()["error"]["message"]
     for _ in range(400):
-        if client.get(f"/v1/jobs/{job['job_id']}", headers=AUTH).json()["status"] == "done":
+        if client.get(f"/v1/jobs/{job['job_id']}").json()["status"] == "done":
             break
         time.sleep(0.05)
-    assert client.post("/v1/rags/docs/rebuild", headers=AUTH).status_code == 200
+    assert client.post("/v1/rags/docs/rebuild").status_code == 200
 
 
 def test_recipe_errors_stop_the_start(tmp_path: Path) -> None:

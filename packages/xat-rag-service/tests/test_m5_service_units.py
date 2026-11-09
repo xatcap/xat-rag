@@ -8,10 +8,8 @@ import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
-from typing import cast
 
 import pytest
-from xat_rag import XatRag
 from xat_rag.types import ChunkSource, DebugCandidate, DocumentResult, OmittedItem, RetrievalResult, RetrievedChunk
 from xat_rag_core.errors import (
     ConfigError,
@@ -25,7 +23,7 @@ from xat_rag_core.errors import (
 )
 from xat_rag_core.model import BlockSpan, LineSpan, PageSpan, RawDocument, SkippedPage, SourceKind
 from xat_rag_core.query import RetrievalQuery
-from xat_rag_service.app import Limiter, create_app, error_response
+from xat_rag_service.app import Limiter, error_response
 from xat_rag_service.jobs import Job, JobManager, JobStatus
 from xat_rag_service.run import lock_data_folder, write_ready_file
 from xat_rag_service.serialize import chunk_json, document_result_json, query_json, result_json, span_json
@@ -758,12 +756,6 @@ def test_retry_after_is_set_only_when_a_retry_helps() -> None:
     assert other.status_code == 404
     assert "retry-after" not in other.headers
     assert json.loads(bytes(other.body)) == {"error": {"message": "gone", "type": "not_found_error"}}
-
-
-@pytest.mark.parametrize("key", ["", "short", "x" * 15])
-def test_a_short_access_key_is_refused(key: str) -> None:
-    with pytest.raises(InvalidRequestError, match="at least 16 characters"):
-        create_app(cast(XatRag, object()), key, 1, "test")
 
 
 # Helpers of the run module and the serializers.

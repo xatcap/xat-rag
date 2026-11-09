@@ -21,7 +21,6 @@ import uvicorn
 from langchain_core.globals import set_debug, set_verbose
 from xat_rag import Settings, XatRag
 from xat_rag_core.errors import XatRagError
-from xat_rag_offline import Hardening
 
 from xat_rag_service import VERSION
 from xat_rag_service.app import create_app
@@ -113,7 +112,7 @@ class _Server(uvicorn.Server):
                 signal.signal(sig, handler)
 
 
-def run(hardening: Hardening) -> int:
+def run() -> int:
     """Run the service until it stops. Return the exit code."""
     configure_logs()
     langsmith.configure(enabled=False)  # pyright: ignore[reportUnknownMemberType]
@@ -121,8 +120,6 @@ def run(hardening: Hardening) -> int:
     set_verbose(False)
     try:
         settings = read_settings(os.environ)
-        if not hardening.access_key or len(hardening.access_key) < 16 or not hardening.access_key.isascii():
-            raise SystemExit("xat-rag: set XatRag__AccessKey to a random ASCII key of at least 16 characters.")
         if settings.ready_file is not None and settings.ready_file.exists():
             settings.ready_file.unlink()  # A stale file from a killed service must not point to an old address.
         lock = lock_data_folder(settings.data_folder)
@@ -135,7 +132,7 @@ def run(hardening: Hardening) -> int:
                 threads=settings.threads,
             )
         )
-        app = create_app(rag, hardening.access_key, settings.queue_limit, VERSION)
+        app = create_app(rag, settings.queue_limit, VERSION)
     except XatRagError as error:
         print(f"xat-rag: {error.message}", file=sys.stderr)
         return 2

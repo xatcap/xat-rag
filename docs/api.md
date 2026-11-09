@@ -4,24 +4,28 @@ This page describes the HTTP API of the xat-rag service, version 0.1. The servic
 
 The API returns retrieved text only. It calls no LLM, it builds no prompt and it adds no tags or escaping to the text. The app does these tasks. See the [app guide](app-guide.md).
 
-The examples use two shell variables. `URL` is the `url` in the ready file. `KEY` is the access key.
+The examples use one shell variable. `URL` is the `url` in the ready file.
 
 ```bash
 URL=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["url"])' ready.json)
-KEY=...   # The access key that the app set in XatRag__AccessKey.
 ```
 
 ## Access and the request checks
+
+The service has no authentication. Each program on the machine can connect to the TCP port, including the programs of other users. A program that connects can use every route. See [ADR 0015](adr/0015-remove-service-access-key.md).
+
+A Unix socket has the mode `0600` only when `XatRag__ReadyFile` is set. Without a ready file, the socket is open to all users. With a ready file, it is open to all users for a short time at the start.
 
 Every request goes through these checks, in this order:
 
 1. The `Host` header must be `127.0.0.1`, `localhost` or `[::1]`, with or without a port. The check ignores case. A Unix socket client must also send a loopback name, for example `localhost`. Otherwise the service returns 400 `invalid_request_error`.
 2. A request with an `Origin` header returns 400 `invalid_request_error`.
-3. Each route, except `GET /health/live`, needs `Authorization: Bearer <key>`. A wrong or missing key returns 401 `authentication_error`.
+
+The service ignores an `Authorization` header. A client that still sends one is not refused for it.
 
 The service sends no CORS headers.
 
-FastAPI serves the OpenAPI schema at `/openapi.json`. The schema needs the access key. The docs pages of FastAPI are off.
+FastAPI serves the OpenAPI schema at `/openapi.json`. The schema has the same checks as each other route. The docs pages of FastAPI are off.
 
 ## Errors
 
@@ -36,7 +40,6 @@ Each error has this body:
 | `invalid_request_error` | 400 | A body, a field, an upload or a query parameter is not valid. A question has no text after sanitizing. A rebuild runs while a job of the RAG runs. |
 | `invalid_request_error` | 405 | A route is used with the wrong method. |
 | `invalid_request_error` | 413 | A body is larger than its limit. |
-| `authentication_error` | 401 | The access key is missing or wrong. |
 | `not_found_error` | 404 | An unknown route, RAG, document, job or context. |
 | `index_mismatch_error` | 409 | The index of the RAG does not match the models or the recipe. Rebuild the RAG. |
 | `service_unavailable_error` | 503 | The service is degraded, with no `Retry-After`. Restart the service. Or the RAG is being rebuilt or stopped, with `Retry-After: 1`. |
@@ -52,7 +55,7 @@ Validation messages name the fields that failed. They never show the input value
 
 ### Health
 
-`GET /health/live` returns 200 and `{"status": "live"}`. It needs no access key.
+`GET /health/live` returns 200 and `{"status": "live"}`.
 
 `GET /health/ready` returns 200 when the service is ready:
 
@@ -190,7 +193,7 @@ Request:
 Example:
 
 ```bash
-curl -s -X POST "$URL/v1/context" -H "Authorization: Bearer $KEY" \
+curl -s -X POST "$URL/v1/context" \
   -H "Content-Type: application/json" \
   -d '{"context": "ask-docs", "question": "Which port does the orders service use?", "chunks": 5}'
 ```
@@ -307,7 +310,7 @@ Unknown fields are errors. A `kind` that the RAG has no source for is an error.
 Example with `curl`:
 
 ```bash
-curl -s -X PUT "$URL/v1/rags/docs/documents" -H "Authorization: Bearer $KEY" \
+curl -s -X PUT "$URL/v1/rags/docs/documents" \
   -F 'documents=[{"doc_id": "docs:orders.md", "kind": "markdown", "part": "f1", "uri": "orders.md"}];type=application/json' \
   -F 'f1=@orders.md'
 ```
@@ -329,7 +332,6 @@ The service reads its settings from environment variables. The names are not cas
 | Variable | Required | Default | Meaning |
 |---|---|---|---|
 | `XatRag__Urls` | No | `http://127.0.0.1:0` | `http://127.0.0.1:<port>` or `http://[::1]:<port>`. Port 0 lets the system choose. Or `http://unix:<path>` for a Unix socket. |
-| `XatRag__AccessKey` | Yes | (none) | The access key. At least 16 ASCII characters. The service reads it once and removes it from the environment. |
 | `XatRag__DataFolder` | Yes | (none) | The folder for the indexes, the lock file `xat-rag.lock` and the model check cache. The mode is `0700`. |
 | `XatRag__RecipesFolder` | Yes | (none) | The folder with `rags/*.toml` and `contexts/*.toml`. |
 | `XatRag__ModelsFolder` | Yes | (none) | The folder with the model files. |
@@ -345,7 +347,7 @@ The service removes `LANGSMITH_*`, `LANGCHAIN_*` and each variable whose name en
 
 ## Lifecycle
 
-1. The service checks its settings and the access key.
+1. The service checks its settings.
 2. It takes the lock of the data folder. A second service with the same folder stops with an error.
 3. It loads the recipes, the models and the indexes. A recipe with an unknown key stops the start, and the message names the field.
 4. It starts to listen. It writes the ready file. The ready file is deleted when the service stops.
@@ -380,16 +382,16 @@ The limits of the parsers are in the [architecture](architecture.md#5-ingestion-
 Ingest a document and wait for the job:
 
 ```bash
-JOB=$(curl -s -X PUT "$URL/v1/rags/docs/documents" -H "Authorization: Bearer $KEY" \
+JOB=$(curl -s -X PUT "$URL/v1/rags/docs/documents" \
   -F 'documents=[{"doc_id": "docs:orders.md", "kind": "markdown", "part": "f1"}];type=application/json' \
   -F 'f1=@orders.md' | python3 -c 'import json,sys; print(json.load(sys.stdin)["job_id"])')
-curl -s "$URL/v1/jobs/$JOB" -H "Authorization: Bearer $KEY"
+curl -s "$URL/v1/jobs/$JOB"
 ```
 
 Ask for the ranked chunks of a question:
 
 ```bash
-curl -s -X POST "$URL/v1/context" -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+curl -s -X POST "$URL/v1/context" -H "Content-Type: application/json" \
   -d '{"context": "ask-docs", "question": "Which port does the orders service use?", "chunks": 5}'
 ```
 
@@ -404,4 +406,6 @@ These routes, fields, settings and error types are removed. A request that sends
 - Omitted reasons `budget` and `quota`.
 - Debug field `exact_rank`, and the query field `exact_lookups`.
 - Error type `context_too_large_error` (422).
+- Error type `authentication_error` (401). See [ADR 0015](adr/0015-remove-service-access-key.md).
 - Setting `XatRag__PromptsFolder`.
+- Setting `XatRag__AccessKey`. The service ignores it.

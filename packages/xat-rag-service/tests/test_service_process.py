@@ -9,7 +9,7 @@ import urllib.request
 from pathlib import Path
 
 import pytest
-from service_setup import KEY, MODELS, kept_environment, write_setup
+from service_setup import MODELS, kept_environment, write_setup
 
 pytestmark = [
     pytest.mark.skipif(not (MODELS / "bge-small-en-v1.5" / "model.onnx").exists(), reason="models not fetched"),
@@ -17,8 +17,8 @@ pytestmark = [
 ]
 
 
-def _get(url: str, path: str, key: str | None = KEY) -> tuple[int, dict[str, object]]:
-    request = urllib.request.Request(url + path, headers={"Authorization": f"Bearer {key}"} if key else {})
+def _get(url: str, path: str) -> tuple[int, dict[str, object]]:
+    request = urllib.request.Request(url + path)
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
             return response.status, json.loads(response.read())
@@ -56,8 +56,7 @@ def test_service_starts_hardened_and_stops_when_input_closes(tmp_path: Path) -> 
         assert url.startswith("http://127.0.0.1:")
         if sys.platform != "win32":  # On Windows, the Python of a virtual environment starts a second process.
             assert info["pid"] == service.pid
-        assert _get(url, "/health/live", key=None)[0] == 200
-        assert _get(url, "/v1/rags", key="wrong")[0] == 401
+        assert _get(url, "/health/live")[0] == 200
         status, body = _get(url, "/health/ready")
         assert status == 200, body
         status, body = _get(url, "/v1/rags")

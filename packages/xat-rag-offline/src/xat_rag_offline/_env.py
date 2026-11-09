@@ -26,24 +26,14 @@ _OFFLINE_VARIABLES: Mapping[str, str] = MappingProxyType(
 _DELETED_PREFIXES: tuple[str, ...] = ("LANGSMITH_", "LANGCHAIN_")
 _SECRET_SUFFIXES: tuple[str, ...] = ("_API_KEY", "_TOKEN", "_ENDPOINT", "_ENDPOINTS")
 _OWN_PREFIX = "XATRAG__"
-_ACCESS_KEY_NAME = "XATRAG__ACCESSKEY"
 
 
-class DuplicateAccessKeyError(ValueError):
-    """The environment has more than one access key variable, with different case."""
-
-
-def harden_environment(environ: MutableMapping[str, str], hf_home: Path | None) -> str | None:
-    """Change `environ` for service mode, and return the access key of the service.
+def harden_environment(environ: MutableMapping[str, str], hf_home: Path | None) -> None:
+    """Change `environ` for service mode.
 
     The function overwrites old values. Names are compared without case, because Windows
-    changes the case of environment names. It returns the value of `XatRag__AccessKey`,
-    or `None` if the variable is not set, and it deletes the variable.
+    changes the case of environment names.
     """
-    key_names = [name for name in environ if name.upper() == _ACCESS_KEY_NAME]
-    if len(key_names) > 1:
-        raise DuplicateAccessKeyError("Set the access key in one variable only: XatRag__AccessKey.")
-    access_key = environ.pop(key_names[0]) if key_names else None
     for name in list(environ):
         upper = name.upper()
         if upper.startswith(_DELETED_PREFIXES) or (
@@ -57,4 +47,3 @@ def harden_environment(environ: MutableMapping[str, str], hf_home: Path | None) 
         environ[name] = value
     if hf_home is not None:
         environ["HF_HOME"] = str(hf_home)
-    return access_key

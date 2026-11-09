@@ -1,7 +1,6 @@
 from pathlib import Path
 
-import pytest
-from xat_rag_offline import TRACING_VARIABLES, DuplicateAccessKeyError, Hardening, NetworkGuard, harden_environment
+from xat_rag_offline import TRACING_VARIABLES, harden_environment
 
 
 def test_tracing_is_forced_off_and_langsmith_variables_are_deleted() -> None:
@@ -47,24 +46,3 @@ def test_secrets_are_deleted_but_own_settings_stay() -> None:
     assert env["XatRag__Some_TOKEN"] == "keep"
     assert env["XATRAG__OTHER_API_KEY"] == "keep"
     assert env["XatRag__DataFolder"] == "/d"
-
-
-def test_access_key_is_returned_once_and_removed() -> None:
-    env = {"XatRag__AccessKey": "secret"}
-    assert harden_environment(env, hf_home=None) == "secret"
-    assert "XatRag__AccessKey" not in env
-    assert harden_environment(env, hf_home=None) is None
-
-
-def test_access_key_name_is_case_insensitive() -> None:
-    env = {"XATRAG__ACCESSKEY": "secret"}
-    assert harden_environment(env, hf_home=None) == "secret"
-
-
-def test_two_access_key_variables_are_refused() -> None:
-    with pytest.raises(DuplicateAccessKeyError):
-        harden_environment({"XatRag__AccessKey": "a", "XATRAG__ACCESSKEY": "b"}, hf_home=None)
-
-
-def test_hardening_repr_hides_the_access_key() -> None:
-    assert "secret" not in repr(Hardening(access_key="secret", guard=NetworkGuard()))

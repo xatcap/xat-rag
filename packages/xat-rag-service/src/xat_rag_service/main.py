@@ -29,13 +29,11 @@ def main() -> None:
     def on_block(event: str) -> None:  # The event name only, never the address or the data (ADR 0011).
         print(f"xat-rag: the network guard refused '{event}'.", file=sys.stderr)
 
-    hardening = harden_process(
-        Path(data), allowed_extensions=[extension, *(extension + s for s in suffixes)], on_block=on_block
-    )
+    harden_process(Path(data), allowed_extensions=[extension, *(extension + s for s in suffixes)], on_block=on_block)
 
     from xat_rag_service.run import run  # noqa: PLC0415 - after the hardening, by design.
 
-    sys.exit(run(hardening))
+    sys.exit(run())
 
 
 if __name__ == "__main__":

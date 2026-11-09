@@ -113,12 +113,11 @@ export XatRag__DataFolder="$PWD/build/out/dev-data"
 export XatRag__RecipesFolder="$PWD/eval/fixtures/setup/recipes"
 export XatRag__ModelsFolder="$PWD/models"
 export XatRag__LockFile="$PWD/build/models.lock.json"
-export XatRag__AccessKey="$(python3 -c 'import secrets; print(secrets.token_hex(16))')"
 export XatRag__ReadyFile="$XatRag__DataFolder/ready.json"
 uv run xat-rag-service
 ```
 
-When the service is ready, the ready file holds its URL. Read the `url` field from that file, and send the access key in each request.
+When the service is ready, the ready file holds its URL. Read the `url` field from that file, and send each request to it. The service has no authentication. See [ADR 0015](adr/0015-remove-service-access-key.md).
 
 ## Package and release
 
@@ -126,7 +125,7 @@ When the service is ready, the ready file holds its URL. Read the `url` field fr
 
 - `package` runs PyInstaller with `build/xat-rag-service.spec`. The output is one folder, `build/out/dist/xat-rag-service/`. It contains the executable and the libraries. The models are not in the folder. The app installs them next to it. The task also copies the default recipes from `eval/fixtures/setup/recipes` to the `recipes/` subfolder. These are the RAGs `docs` (Markdown), `jira` and `diffs`, and the contexts `ask-docs` and `triage`. To use them, set `XatRag__RecipesFolder` to that subfolder. The spec excludes the modules of ADR 0011, section 4, and the optional imports that the service does not use, such as PIL, setuptools and `pkg_resources`.
 - `check-bundle` fails when a denied module is in the frozen folder. It checks the folder, the native libraries and the modules in the archive.
-- `smoke-test` starts the frozen executable with the default recipes in the frozen folder. It ingests `eval/fixtures/setup/documents/docs/orders.md` with the access key, waits for the job, and asks the `ask-docs` context about the port of the orders service. The test passes when the first chunk has the expected chunk ID and source document. The service has 300 seconds to start. The stderr output goes to a file in the test folder. If the service does not start in time, the test stops it and fails.
+- `smoke-test` starts the frozen executable with the default recipes in the frozen folder. It sets `LANGSMITH_TRACING=true`. The service must turn tracing off. The test ingests `eval/fixtures/setup/documents/docs/orders.md`, waits for the job, and asks the `ask-docs` context about the port of the orders service. The test passes when the first chunk has the expected chunk ID, the source document and a line span. The service has 300 seconds to start. The stderr output goes to a file in the test folder. If the service does not start in time, the test fails. The test stops the service by closing its standard input. If the service does not stop within 60 seconds, the test kills it.
 - `archive <tag>` puts the frozen folder in `build/out/release/xat-rag-service-<tag>-<system>-<machine>`. The file is a `.zip` file on Windows and a `.tar.gz` file on Linux and macOS.
 - `archive-models <tag>` puts the files of `build/models.lock.json`, and the lock file itself, in `build/out/release/xat-rag-models-<tag>.zip`. Extract the file to a folder. Set `XatRag__ModelsFolder` to that folder, and set `XatRag__LockFile` to the `models.lock.json` file in it.
 
@@ -134,7 +133,7 @@ When the service is ready, the ready file holds its URL. Read the `url` field fr
 
 The repository has no signing or notarization step yet. The first release task must add it, as [ADR 0002](adr/0002-python.md) states. The models are a separate release file. The lock file lists the license of each model.
 
-The runtime hook `build/pyinstaller_runtime_hook.py` runs before `main`. It calls `harden_environment` only, and it keeps the access key for `main`. Then `main` calls `harden_process`, which reads and removes the key and installs the network guard. See [ADR 0011](adr/0011-offline-hardening.md).
+The runtime hook `build/pyinstaller_runtime_hook.py` runs before `main`. It calls `harden_environment` only. That function deletes the tracing and secret variables, and it sets the offline variables and `HF_HOME`. Then `main` calls `harden_process`. It calls `harden_environment` again, and it installs the network guard. See [ADR 0011](adr/0011-offline-hardening.md).
 
 ## Continuous integration
 

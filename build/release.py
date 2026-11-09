@@ -9,7 +9,6 @@ uv run python build/release.py archive-models v1.2.3   # archive the locked mode
 import json
 import os
 import platform
-import secrets
 import shutil
 import subprocess
 import sys
@@ -103,13 +102,12 @@ def check_bundle() -> None:
 def _call(
     url: str,
     path: str,
-    key: str,
     *,
     body: bytes | None = None,
     content_type: str = "application/json",
     method: str | None = None,
 ) -> tuple[int, Any]:
-    headers = {"Authorization": f"Bearer {key}", "Content-Type": content_type}
+    headers = {"Content-Type": content_type}
     request = urllib.request.Request(url + path, data=body, method=method, headers=headers)  # noqa: S310 - loopback.
     try:
         with urllib.request.urlopen(request, timeout=60) as response:  # noqa: S310 - loopback.
@@ -125,7 +123,6 @@ def _call(
 def smoke_test() -> None:
     """Start the frozen service with its default recipes, ingest one document, and make a retrieval result."""
     binary = DIST / ("xat-rag-service.exe" if os.name == "nt" else "xat-rag-service")
-    key = secrets.token_hex(16)
     with tempfile.TemporaryDirectory() as folder:
         work = Path(folder)
         kept = {"PATH", "HOME", "TMPDIR", "TEMP", "TMP", "SYSTEMROOT", "USERPROFILE", "APPDATA", "LOCALAPPDATA"}
@@ -137,7 +134,6 @@ def smoke_test() -> None:
             "XatRag__LockFile": str(ROOT / "build" / "models.lock.json"),
             "XatRag__ReadyFile": str(work / "ready.json"),
             "XatRag__StopWhenInputCloses": "true",
-            "XatRag__AccessKey": key,
             "LANGSMITH_TRACING": "true",
         }
         log = (work / "stderr.txt").open("wb")
@@ -164,20 +160,19 @@ def smoke_test() -> None:
             status, job = _call(
                 url,
                 "/v1/rags/docs/documents",
-                key,
                 body=body,
                 content_type=f"multipart/form-data; boundary={boundary}",
                 method="PUT",
             )
             assert status == 202, job
             for _ in range(300):
-                status, state = _call(url, f"/v1/jobs/{job['job_id']}", key)
+                status, state = _call(url, f"/v1/jobs/{job['job_id']}")
                 if state["status"] in {"done", "failed"}:
                     break
                 time.sleep(0.1)
             assert state["status"] == "done", state
             question = json.dumps({"context": "ask-docs", "question": "Which port do orders use?"}).encode()
-            status, result = _call(url, "/v1/context", key, body=question, method="POST")
+            status, result = _call(url, "/v1/context", body=question, method="POST")
             assert status == 200, result
             first = result["chunks"][0]
             assert first["chunk_id"] == "docs:orders.md#h/orders-service/ports-and-health", first

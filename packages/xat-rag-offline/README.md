@@ -8,8 +8,7 @@ The package has no dependencies. Call `harden_process()` as the first statement 
 from pathlib import Path
 from xat_rag_offline import harden_process
 
-hardening = harden_process(Path("/path/to/data"), allowed_extensions=[sqlite_vec_path])
-access_key = hardening.access_key
+harden_process(Path("/path/to/data"), allowed_extensions=[sqlite_vec_path])
 ```
 
-[ADR 0011](../../docs/adr/0011-offline-hardening.md) lists the steps of `harden_process()`, and how the frozen app calls it.
+[ADR 0011](../../docs/adr/0011-offline-hardening.md) lists the steps of `harden_process()`, and how the frozen app calls it. [ADR 0015](../../docs/adr/0015-remove-service-access-key.md) removes step 3 of ADR 0011, the step that read the access key.

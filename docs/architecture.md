@@ -386,14 +386,22 @@ See [ADR 0003](adr/0003-library-and-loopback-service.md). The service accepts on
 
 RAG names and context names match `[a-z0-9][a-z0-9-]{0,63}`.
 
-### Access control
+### Access and exposure
 
-Loopback alone is not enough. Other programs and other users on the machine can connect to `127.0.0.1`, and a web page can try to reach it through the browser. The [API reference](api.md#access-and-the-request-checks) lists the checks. Each check has this purpose:
+The service has no authentication. See [ADR 0015](adr/0015-remove-service-access-key.md). This exposure is accepted for xat-rag v0.1. Each program on the machine can connect to the TCP port, including the programs of other users. Such a program can do these tasks:
 
-- **The access key** stops other programs on the machine. The app makes a new random key at each start.
+- Read the indexed text.
+- Upload and delete documents.
+- Cancel jobs.
+- Rebuild a RAG.
+
+The mode `0700` of the data folder does not limit access through the service.
+
+The [API reference](api.md#access-and-the-request-checks) lists the request checks. Each check has this purpose:
+
 - **The `Host` check** stops DNS rebinding.
-- **The `Origin` check** and the absence of CORS headers stop web pages.
-- **A Unix socket** on macOS and Linux lets the file permissions decide who can connect. The socket is `0600`.
+- **The `Origin` check** and the absence of CORS headers refuse browser requests that carry an `Origin` header. A browser sends no `Origin` header on a cross-site `GET` without CORS. Such a request reaches the service, but the page cannot read the response. A page can still detect the service, and it can use the request slots for a short time.
+- **A Unix socket** on macOS and Linux can use the file permissions to decide who connects. The service sets the mode `0600` only when `XatRag__ReadyFile` is set. Without a ready file, the socket is open to all users. Windows has no Unix socket mode in xat-rag, so it gives no control against other users.
 
 ### Lifecycle
 

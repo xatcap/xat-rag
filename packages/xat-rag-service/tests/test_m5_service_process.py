@@ -8,11 +8,12 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.request
 from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from service_setup import KEY, MODELS, kept_environment, write_setup
+from service_setup import MODELS, kept_environment, write_setup
 
 pytestmark = [
     pytest.mark.skipif(not (MODELS / "bge-small-en-v1.5" / "model.onnx").exists(), reason="models not fetched"),
@@ -83,14 +84,15 @@ def test_the_service_listens_on_a_unix_socket(tmp_path: Path, short_folder: Path
         assert (response.status, json.loads(response.read())) == (200, {"status": "live"})
         connection.close()
         connection = UnixConnection(str(socket_path))
-        connection.request("GET", "/v1/rags", headers={"Authorization": f"Bearer {KEY}"})
+        connection.request("GET", "/v1/rags")
         response = connection.getresponse()
         assert response.status == 200
         assert {rag["name"] for rag in json.loads(response.read())["rags"]} == {"docs", "manuals"}
         connection.close()
+        # A client that still sends a key is not refused.
         connection = UnixConnection(str(socket_path))
-        connection.request("GET", "/v1/rags")
-        assert connection.getresponse().status == 401
+        connection.request("GET", "/v1/rags", headers={"Authorization": "Bearer stale"})
+        assert connection.getresponse().status == 200
         connection.close()
     finally:
         assert service.stdin is not None
@@ -127,13 +129,46 @@ def test_a_non_loopback_address_stops_the_start_with_exit_code_2(tmp_path: Path)
     assert b"Traceback" not in result.stderr
 
 
-def test_a_missing_access_key_stops_the_start(tmp_path: Path) -> None:
-    env = base_env(tmp_path)
-    del env["XatRag__AccessKey"]
-    result = run_once(env)
-    assert result.returncode != 0
-    assert b"AccessKey" in result.stderr
-    assert b"Traceback" not in result.stderr
+@pytest.mark.parametrize("stale_key", [False, True], ids=["no key", "stale XatRag__AccessKey"])
+def test_the_service_starts_with_no_access_key_and_ignores_a_stale_one(tmp_path: Path, stale_key: bool) -> None:
+    ready = tmp_path / "ready.json"
+    stale_value = "stale-key-0123456789"
+    env = {
+        **base_env(tmp_path),
+        "XatRag__Urls": "http://127.0.0.1:0",
+        "XatRag__ReadyFile": str(ready),
+        "XatRag__StopWhenInputCloses": "true",
+    }
+    assert "XatRag__AccessKey" not in env
+    if stale_key:
+        env["XatRag__AccessKey"] = stale_value
+    service = subprocess.Popen(
+        [sys.executable, "-m", "xat_rag_service.main"],
+        env=env,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    try:
+        for _ in range(600):
+            if ready.exists() or service.poll() is not None:
+                break
+            time.sleep(0.1)
+        assert ready.exists(), service.stderr.read().decode() if service.stderr else ""
+        url = json.loads(ready.read_text())["url"]
+        with urllib.request.urlopen(f"{url}/v1/rags", timeout=30) as response:
+            assert response.status == 200
+    finally:
+        assert service.stdin is not None
+        service.stdin.close()
+        try:
+            output, errors = service.communicate(timeout=30)
+        except subprocess.TimeoutExpired:
+            service.kill()
+            raise
+    assert service.returncode == 0
+    assert b"AccessKey" not in errors
+    assert stale_value.encode() not in output + errors
 
 
 def test_a_bad_recipe_stops_the_start_with_exit_code_2(tmp_path: Path) -> None:

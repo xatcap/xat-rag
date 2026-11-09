@@ -8,7 +8,11 @@ xat-rag is now retrieval-only. It returns ranked chunks of text, and it has no m
 
 Log handling and exact lookups are removed. There is one query path for a plain question.
 
+The access key of the service is removed. See [ADR 0015](docs/adr/0015-remove-service-access-key.md). Each program on the machine can now read and change the indexes through the service. The error type `authentication_error` (401) is removed.
+
 ### Upgrade steps
+
+Update the service first, and then remove the key from the app. An old service refuses a request without a key. The service ignores a stale `XatRag__AccessKey` variable and a stale `Authorization` header.
 
 1. Edit each recipe. Remove the keys that the service refuses. The service refuses an old key at startup, and the message names the field. See the removed keys below.
 2. Remove `XatRag__PromptsFolder` from the environment of the service.

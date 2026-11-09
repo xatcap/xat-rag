@@ -38,6 +38,8 @@ Treat these values as untrusted:
 
 A JIRA comment, a diff or a document can hold text that tries to give the LLM new instructions. This is called prompt injection. xat-rag does not change the text. Your app must do this work.
 
+Any program on the same machine can upload documents to the service, so a chunk can hold text from an outside source ([ADR 0015](adr/0015-remove-service-access-key.md)).
+
 Follow these rules:
 
 - Wrap each chunk in a clear block. Use a tag, a fence or a label that the text cannot close.

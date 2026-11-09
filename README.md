@@ -84,22 +84,23 @@ Before the text goes to an LLM, count its tokens with the tokenizer of that LLM.
 
 ### Service
 
-Set the settings and start the service. The access key must have at least 16 ASCII characters.
+Set the settings and start the service.
 
 ```bash
 export XatRag__DataFolder=/path/to/data
 export XatRag__RecipesFolder=/path/to/recipes
 export XatRag__ModelsFolder=/path/to/models
 export XatRag__LockFile=/path/to/build/models.lock.json
-export XatRag__AccessKey=<a random key of at least 16 characters>
 export XatRag__ReadyFile=/path/to/ready.json
 xat-rag-service
 ```
 
-The ready file holds the URL of the service. Each request, except `GET /health/live`, sends the key:
+The service has no authentication. Each program on the same machine, including the programs of other users, can use it. Read [ADR 0015](docs/adr/0015-remove-service-access-key.md) before you use the service on a shared machine.
+
+The ready file holds the URL of the service. Use that URL in each request:
 
 ```bash
-curl -s -X POST "$URL/v1/context" -H "Authorization: Bearer $KEY" \
+curl -s -X POST "$URL/v1/context" \
   -H "Content-Type: application/json" \
   -d '{"context": "ask-docs", "question": "Which port does the orders service use?", "chunks": 5}'
 ```

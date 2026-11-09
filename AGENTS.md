@@ -31,18 +31,19 @@ The ADRs record the significant decisions and their reasons. Read them before yo
 |-----|--------|
 | [0001. Use LangChain core interfaces as the foundation, and keep the budget, query and store stages our own](docs/adr/0001-langchain-core-as-foundation.md) | Accepted (the budget and log stages are removed, see 0013 and 0014) |
 | [0002. Write xat-rag in Python](docs/adr/0002-python.md) | Accepted |
-| [0003. Offer a Python library and a loopback HTTP service](docs/adr/0003-library-and-loopback-service.md) | Accepted |
+| [0003. Offer a Python library and a loopback HTTP service](docs/adr/0003-library-and-loopback-service.md) | Partly superseded by 0015 |
 | [0004. Run the embedder and the reranker with ONNX Runtime, from locked files](docs/adr/0004-onnx-runtime-and-locked-models.md) | Accepted |
 | [0005. Store each RAG in one SQLite file with a manifest](docs/adr/0005-sqlite-store-and-index-manifest.md) | Accepted |
 | [0006. Use hybrid search with RRF and a cross-encoder reranker, without query rewriting](docs/adr/0006-hybrid-retrieval-and-reranking.md) | Partly superseded by 0013 and 0014 |
 | [0007. Let the context recipe own the budget, and count tokens with the generator's tokenizer](docs/adr/0007-context-budget-and-token-counting.md) | Superseded by 0014 |
 | [0008. Return a context pack, and do not call a generator](docs/adr/0008-context-pack-and-citations.md) | Superseded by 0014 |
 | [0009. Map each kind of failure to one error type, with no retries](docs/adr/0009-error-model.md) | Accepted |
-| [0010. Treat retrieved text as untrusted, keep content out of logs, and accept only pushed documents](docs/adr/0010-untrusted-content-privacy-and-ingestion.md) | Partly superseded by 0014 |
-| [0011. Turn off tracing and telemetry at startup, and guard against network access](docs/adr/0011-offline-hardening.md) | Accepted |
+| [0010. Treat retrieved text as untrusted, keep content out of logs, and accept only pushed documents](docs/adr/0010-untrusted-content-privacy-and-ingestion.md) | Partly superseded by 0014 and 0015 |
+| [0011. Turn off tracing and telemetry at startup, and guard against network access](docs/adr/0011-offline-hardening.md) | Partly superseded by 0015 |
 | [0012. Parse PDF, DOCX and HTML in the service process, with limits](docs/adr/0012-document-parsers.md) | Accepted |
 | [0013. Remove log handling and exact lookups from queries](docs/adr/0013-remove-log-handling-and-exact-lookups.md) | Accepted |
 | [0014. Make xat-rag retrieval-only: the app fits the context, and xat-rag has no model knowledge](docs/adr/0014-retrieval-only-and-app-side-fitting.md) | Accepted |
+| [0015. Remove the access key of the service](docs/adr/0015-remove-service-access-key.md) | Accepted |
 
 ## Packages and tools
 

@@ -1,8 +1,10 @@
 # 0011. Turn off tracing and telemetry at startup, and guard against network access
 
-- Status: Accepted
+- Status: Accepted. Partly superseded by ADR 0015.
 - Date: 2026-11-07
 - Deciders: Project maintainer
+
+> Part of this decision is superseded on 2026-11-09 by [ADR 0015](0015-remove-service-access-key.md). The hardening no longer reads, keeps or removes an access key. The other steps stay in force. The text below is the history of the decision.
 
 ## Context
 

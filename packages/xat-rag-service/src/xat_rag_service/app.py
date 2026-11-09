@@ -4,7 +4,6 @@ See the architecture, sections 9 and 11, and ADRs 0003 and 0009.
 """
 
 import asyncio
-import hmac
 import logging
 import threading
 from collections.abc import Awaitable, Callable
@@ -18,7 +17,6 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from xat_rag import ContextRequest, XatRag
 from xat_rag_core.errors import (
-    AuthenticationError,
     ErrorType,
     InvalidRequestError,
     NotFoundError,
@@ -41,7 +39,6 @@ MAX_JSON_BYTES = 1 * MIB
 _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "[::1]"})
 _INTERNAL_MESSAGE = "An unexpected failure happened in xat-rag."
 LOG = logging.getLogger("xat_rag")
-_OPEN_PATHS = frozenset({"/health/live"})
 
 
 class _Body(BaseModel):
@@ -161,10 +158,8 @@ class _TooLargeError(Exception):
     """The request body is larger than its limit."""
 
 
-def create_app(rag: XatRag, access_key: str, queue_limit: int, version: str) -> FastAPI:  # noqa: PLR0915
-    """Make the app. `access_key` must be the key that the app gave at start."""
-    if len(access_key) < 16:
-        raise InvalidRequestError("The access key must have at least 16 characters.")
+def create_app(rag: XatRag, queue_limit: int, version: str) -> FastAPI:  # noqa: PLR0915
+    """Make the app."""
     app = FastAPI(title="xat-rag", version=version, docs_url=None, redoc_url=None)
     limiter = Limiter(queue_limit)
     # Embedding and storing come after the parse, so a stuck document is one that takes far longer.
@@ -172,7 +167,6 @@ def create_app(rag: XatRag, access_key: str, queue_limit: int, version: str) -> 
     jobs = JobManager(rag.ingest_one, rag.checkpoint, stuck_after_seconds=stuck_after)
     app.state.limiter = limiter
     app.state.jobs = jobs
-    expected = f"Bearer {access_key}".encode()
 
     @app.middleware("http")
     async def guard(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
@@ -180,9 +174,6 @@ def create_app(rag: XatRag, access_key: str, queue_limit: int, version: str) -> 
             return _plain_error(400, ErrorType.INVALID_REQUEST, "The Host header must be a loopback name.")
         if "origin" in request.headers:
             return _plain_error(400, ErrorType.INVALID_REQUEST, "Requests from browsers are refused.")
-        given = (request.headers.get("authorization") or "").encode("latin-1", "replace")
-        if request.url.path not in _OPEN_PATHS and not hmac.compare_digest(given, expected):
-            return error_response(AuthenticationError("The access key is missing or wrong."))
         try:
             return await call_next(request)
         except Exception as error:  # Only the type goes into the log, never the message (ADR 0010).

@@ -14,7 +14,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pypdf import PdfReader, PdfWriter
-from service_setup import KEY, LOCK, MODELS, multipart, write_setup
+from service_setup import LOCK, MODELS, multipart, write_setup
 from xat_rag import ContextRequest, RetrievalResult, Settings, XatRag
 from xat_rag.types import DocumentResult
 from xat_rag_core.model import RawDocument
@@ -26,7 +26,6 @@ pytestmark = [
     pytest.mark.allow_hosts(["127.0.0.1"]),
 ]
 
-AUTH = {"Authorization": f"Bearer {KEY}"}
 DOC = (
     b"# Handbook\n\n## Orders\n\nThe orders service runs on port 8080 and stores data in PostgreSQL.\n\n"
     b"## Food\n\nPasta on Friday.\n"
@@ -138,18 +137,15 @@ def upload(
     rag: str,
     documents: list[dict[str, Any]],
     files: dict[str, bytes],
-    headers: dict[str, str] | None = None,
 ) -> Any:
     body, content_type = multipart(json.dumps(documents), files)
-    return client.put(
-        f"/v1/rags/{rag}/documents", content=body, headers={**(headers or AUTH), "Content-Type": content_type}
-    )
+    return client.put(f"/v1/rags/{rag}/documents", content=body, headers={"Content-Type": content_type})
 
 
 def wait_job(client: TestClient, job_id: str, seconds: float = 30.0) -> dict[str, Any]:
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
-        job: dict[str, Any] = client.get(f"/v1/jobs/{job_id}", headers=AUTH).json()
+        job: dict[str, Any] = client.get(f"/v1/jobs/{job_id}").json()
         if job["status"] in {"done", "failed", "cancelled"}:
             return job
         time.sleep(0.02)
@@ -168,7 +164,7 @@ def make_client(rag: XatRag) -> Iterator[Callable[..., TestClient]]:
     apps: list[FastAPI] = []
 
     def build(queue_limit: int = 8) -> TestClient:
-        app = create_app(rag, KEY, queue_limit=queue_limit, version="m5")
+        app = create_app(rag, queue_limit=queue_limit, version="m5")
         apps.append(app)
         return TestClient(app, base_url="http://127.0.0.1")
 
@@ -215,7 +211,7 @@ def test_pdf_docx_html_and_markdown_in_one_upload(client: TestClient) -> None:
     assert [r["status"] for r in job["results"]] == ["created"] * 4
     assert job["results"][0]["pages_total"] == 2
     assert job["results"][0]["skipped_pages"] == [{"page": 2, "label": "2", "reason": "no_text"}]
-    hits = client.post("/v1/rags/mixed/search", json={"question": "shipping depot opens"}, headers=AUTH).json()["hits"]
+    hits = client.post("/v1/rags/mixed/search", json={"question": "shipping depot opens"}).json()["hits"]
     assert hits[0]["chunk_id"].startswith("mixed:manual.pdf#")
     source = hits[0]["source"]
     assert source["span"]["type"] == "page"
@@ -228,16 +224,16 @@ def test_pdf_docx_html_and_markdown_in_one_upload(client: TestClient) -> None:
     assert spans["mixed:spec.docx"] == "block"
     assert spans["mixed:guide.html"] == "line"
     assert spans["mixed:note.md"] == "line"
-    billing = client.post("/v1/rags/mixed/search", json={"question": "billing TLS port 9443"}, headers=AUTH).json()
+    billing = client.post("/v1/rags/mixed/search", json={"question": "billing TLS port 9443"}).json()
     assert billing["hits"][0]["chunk_id"].startswith("mixed:spec.docx#")
-    context = client.post("/v1/context", json={"context": "mixed", "question": "shipping depot opens"}, headers=AUTH)
+    context = client.post("/v1/context", json={"context": "mixed", "question": "shipping depot opens"})
     assert context.status_code == 200, context.text
     top = context.json()["chunks"][0]
     assert top["chunk_id"].startswith("mixed:manual.pdf#")
     assert top["source"]["uri"].startswith("https://wiki/manual.pdf#page=")
     assert top["source"]["version"] == "rev-4"
     for doc_id in ("mixed:manual.pdf", "mixed:spec.docx", "mixed:guide.html", "mixed:note.md"):
-        assert client.delete(f"/v1/rags/mixed/documents/{doc_id}", headers=AUTH).json() == {"deleted": True}
+        assert client.delete(f"/v1/rags/mixed/documents/{doc_id}").json() == {"deleted": True}
 
 
 def test_failed_documents_do_not_fail_the_job(client: TestClient) -> None:
@@ -263,7 +259,7 @@ def test_failed_documents_do_not_fail_the_job(client: TestClient) -> None:
     ]
     assert all(r["error_type"] == "parse_error" for r in job["results"][:3])
     assert "Secret page" not in json.dumps(job)
-    client.delete("/v1/rags/mixed/documents/mixed:good.md", headers=AUTH)
+    client.delete("/v1/rags/mixed/documents/mixed:good.md")
 
 
 def good_fields(count: int = 1) -> list[dict[str, Any]]:
@@ -273,7 +269,7 @@ def good_fields(count: int = 1) -> list[dict[str, Any]]:
 def test_upload_without_a_documents_part_is_a_400(client: TestClient) -> None:
     body, content_type = multipart("[]", {"f": b"x"})
     body = body.replace(b'name="documents"', b'name="other"')
-    response = client.put("/v1/rags/docs/documents", content=body, headers={**AUTH, "Content-Type": content_type})
+    response = client.put("/v1/rags/docs/documents", content=body, headers={"Content-Type": content_type})
     assert response.status_code == 400
     assert response.json()["error"]["type"] == "invalid_request_error"
     assert "'documents' part" in response.json()["error"]["message"]
@@ -294,7 +290,7 @@ def test_upload_with_too_many_documents_is_a_400(client: TestClient) -> None:
 
 @pytest.mark.parametrize("content_type", ["application/json", "text/plain", "multipart/mixed; boundary=x", ""])
 def test_upload_with_a_wrong_content_type_is_a_400(client: TestClient, content_type: str) -> None:
-    headers = {**AUTH, "Content-Type": content_type} if content_type else AUTH
+    headers = {"Content-Type": content_type} if content_type else {}
     response = client.put("/v1/rags/docs/documents", content=b'{"a": 1}', headers=headers)
     assert response.status_code == 400
     assert "multipart/form-data" in response.json()["error"]["message"]
@@ -306,7 +302,7 @@ def test_upload_with_a_wrong_content_type_is_a_400(client: TestClient, content_t
 )
 def test_upload_with_bad_document_fields_is_a_400(client: TestClient, documents: str) -> None:
     body, content_type = multipart(documents, {"f": b"x"})
-    response = client.put("/v1/rags/docs/documents", content=body, headers={**AUTH, "Content-Type": content_type})
+    response = client.put("/v1/rags/docs/documents", content=body, headers={"Content-Type": content_type})
     assert response.status_code == 400
     assert "not a valid list of document fields" in response.json()["error"]["message"]
 
@@ -319,9 +315,7 @@ def test_upload_with_an_unknown_kind_or_rag(client: TestClient) -> None:
 
 
 def test_upload_with_an_empty_body_is_a_400(client: TestClient) -> None:
-    response = client.put(
-        "/v1/rags/docs/documents", headers={**AUTH, "Content-Type": "multipart/form-data; boundary=x"}
-    )
+    response = client.put("/v1/rags/docs/documents", headers={"Content-Type": "multipart/form-data; boundary=x"})
     assert response.status_code == 400
 
 
@@ -345,14 +339,14 @@ def test_a_document_kind_that_the_rag_does_not_take_does_not_drop_the_rest_of_th
         assert len(job["results"]) == 3
     finally:
         for name in ("docs:ok1.md", "docs:ok2.md"):
-            client.delete(f"/v1/rags/docs/documents/{name}", headers=AUTH)
+            client.delete(f"/v1/rags/docs/documents/{name}")
 
 
 # Size limits.
 
 
 def test_a_declared_upload_over_64_mib_is_a_413(client: TestClient) -> None:
-    headers = {**AUTH, "Content-Type": "multipart/form-data; boundary=x", "Content-Length": str(MAX_UPLOAD_BYTES + 1)}
+    headers = {"Content-Type": "multipart/form-data; boundary=x", "Content-Length": str(MAX_UPLOAD_BYTES + 1)}
     response = client.put("/v1/rags/docs/documents", content=b"tiny", headers=headers)
     assert response.status_code == 413
     assert response.json() == {"error": {"message": "The request body is too large.", "type": "invalid_request_error"}}
@@ -363,20 +357,20 @@ def test_an_upload_over_64_mib_without_a_declared_length_is_a_413(client: TestCl
         for _ in range(65):
             yield b"a" * (1024 * 1024)
 
-    headers = {**AUTH, "Content-Type": "multipart/form-data; boundary=x"}
+    headers = {"Content-Type": "multipart/form-data; boundary=x"}
     response = client.put("/v1/rags/docs/documents", content=chunks(), headers=headers)
     assert response.status_code == 413
 
 
-def test_the_access_key_is_checked_before_the_size(client: TestClient) -> None:
+def test_an_oversized_upload_is_a_413_with_no_authorization_header(client: TestClient) -> None:
     headers = {"Content-Type": "multipart/form-data; boundary=x", "Content-Length": str(MAX_UPLOAD_BYTES + 1)}
-    assert client.put("/v1/rags/docs/documents", content=b"tiny", headers=headers).status_code == 401
+    assert client.put("/v1/rags/docs/documents", content=b"tiny", headers=headers).status_code == 413
 
 
 def test_a_json_body_over_1_mib_is_a_413_on_every_json_route(client: TestClient) -> None:
     big = b" " * (1024 * 1024 + 1)
     for path in ("/v1/context", "/v1/query/build", "/v1/rags/docs/search"):
-        response = client.post(path, content=big, headers={**AUTH, "Content-Type": "application/json"})
+        response = client.post(path, content=big, headers={"Content-Type": "application/json"})
         assert response.status_code == 413, path
 
 
@@ -400,7 +394,7 @@ def test_cancel_route_stops_a_running_job_between_documents(
     try:
         job_id = upload(client, "docs", good_fields(3), {"f": b"# T\n\nx"}).json()["job_id"]
         assert started.wait(10)
-        cancelled = client.delete(f"/v1/jobs/{job_id}", headers=AUTH)
+        cancelled = client.delete(f"/v1/jobs/{job_id}")
         assert cancelled.status_code == 200
         assert cancelled.json()["status"] in {"running", "cancelled"}
         release.set()
@@ -409,7 +403,7 @@ def test_cancel_route_stops_a_running_job_between_documents(
         assert (job["total"], job["done"]) == (3, 1)
         assert seen == ["docs:u0.md"]
         assert set(job) == {"job_id", "rag", "status", "total", "done", "error_type", "notes", "results"}
-        again = client.delete(f"/v1/jobs/{job_id}", headers=AUTH)
+        again = client.delete(f"/v1/jobs/{job_id}")
         assert again.status_code == 200
         assert again.json()["status"] == "cancelled"
     finally:
@@ -433,21 +427,21 @@ def test_a_rag_with_a_running_job_cannot_be_rebuilt_and_other_rags_can(
             "job_id"
         ]
         assert started.wait(10)
-        busy = client.post("/v1/rags/manuals/rebuild", headers=AUTH)
+        busy = client.post("/v1/rags/manuals/rebuild")
         assert busy.status_code == 400
         assert busy.json()["error"]["type"] == "invalid_request_error"
         assert "job of this RAG is running" in busy.json()["error"]["message"]
-        assert client.post("/v1/rags/mixed/rebuild", headers=AUTH).status_code == 200
+        assert client.post("/v1/rags/mixed/rebuild").status_code == 200
         release.set()
         assert wait_job(client, job_id)["status"] == "done"
-        assert client.post("/v1/rags/manuals/rebuild", headers=AUTH).status_code == 200
+        assert client.post("/v1/rags/manuals/rebuild").status_code == 200
     finally:
         release.set()
 
 
 def test_unknown_jobs_are_404(client: TestClient) -> None:
     for method in (client.get, client.delete):
-        response = method("/v1/jobs/j_nope", headers=AUTH)
+        response = method("/v1/jobs/j_nope")
         assert (response.status_code, response.json()["error"]["type"]) == (404, "not_found_error")
 
 
@@ -465,7 +459,7 @@ def slow_retrieve(started: threading.Event | None, release: threading.Event) -> 
 
 
 def ask(client: TestClient, question: str = "a") -> Any:
-    return client.post("/v1/context", json={"context": "ask", "question": question}, headers=AUTH)
+    return client.post("/v1/context", json={"context": "ask", "question": question})
 
 
 def test_overloaded_with_a_queue_limit_of_one(
@@ -484,7 +478,7 @@ def test_overloaded_with_a_queue_limit_of_one(
         assert second.json()["error"]["type"] == "overloaded_error"
         assert second.headers["Retry-After"] == "1"
         assert client.get("/health/live").status_code == 200  # Routes with no queue still answer.
-        assert client.get("/v1/jobs/j_none", headers=AUTH).status_code == 404
+        assert client.get("/v1/jobs/j_none").status_code == 404
     finally:
         release.set()
         worker.join(10)
@@ -533,7 +527,7 @@ def mismatched(tmp_path: Path) -> Iterator[tuple[TestClient, XatRag]]:
     recipe = (tmp_path / "recipes" / "rags" / "docs.toml").read_text()
     (tmp_path / "recipes" / "rags" / "docs.toml").write_text(recipe + "max_chunk_tokens = 111\n")
     library = XatRag.open(settings)
-    app = create_app(library, KEY, queue_limit=4, version="m5")
+    app = create_app(library, queue_limit=4, version="m5")
     yield TestClient(app, base_url="http://127.0.0.1"), library
     app.state.jobs.shutdown()
     app.state.limiter.shutdown()
@@ -549,33 +543,33 @@ def test_a_rag_that_needs_a_rebuild_gives_409_on_its_routes(mismatched: tuple[Te
         ("delete", "/v1/rags/docs/documents/docs:x.md", {}),
     ]
     for method, path, extra in calls:
-        response = getattr(client, method)(path, headers=AUTH, **extra)
+        response = getattr(client, method)(path, **extra)
         assert response.status_code == 409, path
         assert response.json()["error"]["type"] == "index_mismatch_error", path
     body, content_type = multipart(json.dumps(good_fields()), {"f": b"# T\n\nx"})
-    put = client.put("/v1/rags/docs/documents", content=body, headers={**AUTH, "Content-Type": content_type})
+    put = client.put("/v1/rags/docs/documents", content=body, headers={"Content-Type": content_type})
     assert put.status_code == 409
-    ready = client.get("/health/ready", headers=AUTH)
+    ready = client.get("/health/ready")
     assert (ready.status_code, ready.json()["needs_rebuild"]) == (200, ["docs"])
-    listing = client.get("/v1/rags", headers=AUTH).json()
+    listing = client.get("/v1/rags").json()
     by_name = {item["name"]: item for item in listing["rags"]}
     assert by_name["docs"] == {"name": "docs", "needs_rebuild": True}
     assert by_name["manuals"]["needs_rebuild"] is False
-    assert client.get("/v1/rags/manuals", headers=AUTH).status_code == 200
-    assert client.get("/v1/rags/mixed", headers=AUTH).status_code == 200
+    assert client.get("/v1/rags/manuals").status_code == 200
+    assert client.get("/v1/rags/mixed").status_code == 200
     assert "ask" in listing["contexts"]
 
 
 def test_rebuild_route_clears_the_mismatch(mismatched: tuple[TestClient, XatRag]) -> None:
     client, library = mismatched
-    assert client.post("/v1/rags/ghost/rebuild", headers=AUTH).status_code == 404
-    response = client.post("/v1/rags/docs/rebuild", headers=AUTH)
+    assert client.post("/v1/rags/ghost/rebuild").status_code == 404
+    response = client.post("/v1/rags/docs/rebuild")
     assert response.status_code == 200
     assert response.json()["rebuilt"] is True
     assert library.needs_rebuild() == {}
-    assert client.get("/v1/rags/docs", headers=AUTH).json()["documents"] == 0
-    assert client.get("/health/ready", headers=AUTH).json()["needs_rebuild"] == []
-    assert client.post("/v1/context", json={"context": "ask", "question": "orders"}, headers=AUTH).status_code == 200
+    assert client.get("/v1/rags/docs").json()["documents"] == 0
+    assert client.get("/health/ready").json()["needs_rebuild"] == []
+    assert client.post("/v1/context", json={"context": "ask", "question": "orders"}).status_code == 200
 
 
 # Health.
@@ -583,11 +577,11 @@ def test_rebuild_route_clears_the_mismatch(mismatched: tuple[TestClient, XatRag]
 
 def test_ready_is_degraded_when_the_job_manager_says_so(make_client: Callable[..., TestClient]) -> None:
     client = make_client()
-    ready = client.get("/health/ready", headers=AUTH)
+    ready = client.get("/health/ready")
     assert ready.status_code == 200
     assert ready.json()["status"] == "ready"
     client.app.state.jobs.degraded_reason = "parse_timeout"  # type: ignore[attr-defined]
-    degraded = client.get("/health/ready", headers=AUTH)
+    degraded = client.get("/health/ready")
     assert degraded.status_code == 503
     assert degraded.json() == {"status": "degraded", "reason": "parse_timeout"}
     assert client.get("/health/live").status_code == 200
@@ -602,7 +596,7 @@ def test_a_degraded_service_refuses_new_uploads_without_a_retry_hint_and_still_r
     assert response.status_code == 503
     assert response.json()["error"]["type"] == "service_unavailable_error"
     assert "Retry-After" not in response.headers
-    assert client.get("/v1/rags", headers=AUTH).status_code == 200
+    assert client.get("/v1/rags").status_code == 200
     assert ask(client).status_code == 200
 
 
@@ -616,7 +610,7 @@ SOURCE_KEYS = {"rag", "doc_id", "source_kind", "uri", "title", "version", "span"
 
 
 def test_the_context_response_has_chunks_omitted_and_debug_only(client: TestClient) -> None:
-    response = client.post("/v1/context", json={"context": "ask", "question": "Which port?"}, headers=AUTH)
+    response = client.post("/v1/context", json={"context": "ask", "question": "Which port?"})
     assert response.status_code == 200, response.text
     data = response.json()
     assert set(data) == {"chunks", "omitted", "debug"}
@@ -641,14 +635,14 @@ def test_the_context_response_has_chunks_omitted_and_debug_only(client: TestClie
 
 
 def test_the_chunks_are_sorted_by_score(client: TestClient) -> None:
-    data = client.post("/v1/context", json={"context": "ask", "question": "Which port?"}, headers=AUTH).json()
+    data = client.post("/v1/context", json={"context": "ask", "question": "Which port?"}).json()
     scores = [chunk["score"] for chunk in data["chunks"]]
     assert scores == sorted(scores, reverse=True)
 
 
 def test_debug_is_a_list_of_scores_when_asked(client: TestClient) -> None:
     body = {"context": "ask", "question": "Which port?", "debug": True}
-    data = client.post("/v1/context", json=body, headers=AUTH).json()
+    data = client.post("/v1/context", json=body).json()
     assert data["debug"]
     assert set(data["debug"][0]) == {
         "chunk_id", "rag", "lexical_rank", "dense_rank", "rrf_score", "rerank_score", "rerank_truncated"
@@ -658,8 +652,8 @@ def test_debug_is_a_list_of_scores_when_asked(client: TestClient) -> None:
 
 def test_the_number_of_chunks_can_be_set_in_the_request(client: TestClient) -> None:
     docs = {"context": "ask", "question": "Which port?"}
-    assert len(client.post("/v1/context", json=docs, headers=AUTH).json()["chunks"]) >= 1
-    one = client.post("/v1/context", json={**docs, "chunks": 1}, headers=AUTH).json()
+    assert len(client.post("/v1/context", json=docs).json()["chunks"]) >= 1
+    one = client.post("/v1/context", json={**docs, "chunks": 1}).json()
     assert len(one["chunks"]) == 1
     assert one["chunks"][0]["chunk_id"] == "docs:handbook.md#h/handbook/orders"
     limited = [item for item in one["omitted"] if item["reason"] == "limit"]
@@ -670,7 +664,7 @@ def test_the_number_of_chunks_can_be_set_in_the_request(client: TestClient) -> N
 @pytest.mark.parametrize("chunks", [0, -1, 101, 10**6, "ten", 1.5, None])
 def test_a_number_of_chunks_outside_1_to_100_is_a_400(client: TestClient, chunks: Any) -> None:
     body = {"context": "ask", "question": "Which port?", "chunks": chunks}
-    response = client.post("/v1/context", json=body, headers=AUTH)
+    response = client.post("/v1/context", json=body)
     if chunks is None:  # No number means the recipe default.
         assert response.status_code == 200
         return
@@ -682,24 +676,24 @@ def test_a_number_of_chunks_outside_1_to_100_is_a_400(client: TestClient, chunks
 @pytest.mark.parametrize("chunks", [1, 100])
 def test_the_limits_of_the_number_of_chunks_are_accepted(client: TestClient, chunks: int) -> None:
     body = {"context": "ask", "question": "Which port?", "chunks": chunks}
-    assert client.post("/v1/context", json=body, headers=AUTH).status_code == 200
+    assert client.post("/v1/context", json=body).status_code == 200
 
 
 @pytest.mark.parametrize("question", ["", " ", "   ", "\n\t", "\u200b", "\u200b\u200b \u2060\ufeff"])
 def test_an_empty_or_zero_width_question_is_a_400(client: TestClient, question: str) -> None:
-    response = client.post("/v1/context", json={"context": "ask", "question": question}, headers=AUTH)
+    response = client.post("/v1/context", json={"context": "ask", "question": question})
     assert response.status_code == 400
     assert response.json()["error"]["type"] == "invalid_request_error"
     assert "needs a question" in response.json()["error"]["message"]
 
 
 def test_a_question_over_20000_characters_is_a_400_and_at_20000_it_is_accepted(client: TestClient) -> None:
-    long = client.post("/v1/context", json={"context": "ask", "question": "a" * 20001}, headers=AUTH)
+    long = client.post("/v1/context", json={"context": "ask", "question": "a" * 20001})
     assert long.status_code == 400
     assert long.json()["error"]["type"] == "invalid_request_error"
     assert "question" in long.json()["error"]["message"]
     assert "aaaa" not in long.text
-    ok = client.post("/v1/context", json={"context": "ask", "question": ("orders " * 3000)[:20000]}, headers=AUTH)
+    ok = client.post("/v1/context", json={"context": "ask", "question": ("orders " * 3000)[:20000]})
     assert ok.status_code == 200, ok.text
 
 
@@ -717,7 +711,7 @@ def test_a_question_over_20000_characters_is_a_400_and_at_20000_it_is_accepted(c
     ],
 )
 def test_a_removed_field_in_the_context_body_is_a_400(client: TestClient, removed: dict[str, Any]) -> None:
-    response = client.post("/v1/context", json={"context": "ask", "question": "q", **removed}, headers=AUTH)
+    response = client.post("/v1/context", json={"context": "ask", "question": "q", **removed})
     assert response.status_code == 400
     assert response.json()["error"]["type"] == "invalid_request_error"
     assert "unknown field" in response.json()["error"]["message"]
@@ -734,20 +728,20 @@ def test_context_body_limits_and_shapes(client: TestClient) -> None:
         {"context": "x" * 65, "question": "q"},
         {"context": "missing", "question": "q"},
     ):
-        response = client.post("/v1/context", json=body, headers=AUTH)
+        response = client.post("/v1/context", json=body)
         assert response.status_code in {400, 404}, body
         assert response.json()["error"]["type"] in {"invalid_request_error", "not_found_error"}
-    assert client.post("/v1/context", json={"context": "missing", "question": "q"}, headers=AUTH).status_code == 404
+    assert client.post("/v1/context", json={"context": "missing", "question": "q"}).status_code == 404
 
 
-@pytest.mark.parametrize("question", ["{}();" * 4000, "\u4e2d" * 20000, "0x" + "deadbeef" * 2000])
+@pytest.mark.parametrize("question", ["{}();" * 4000, "中" * 20000, "0x" + "deadbeef" * 2000])
 def test_a_long_or_odd_question_is_not_a_500(client: TestClient, question: str) -> None:
-    response = client.post("/v1/context", json={"context": "ask", "question": question}, headers=AUTH)
+    response = client.post("/v1/context", json={"context": "ask", "question": question})
     assert response.status_code == 200, response.text
 
 
 def test_the_search_route_hits_have_the_chunk_form_and_the_scores_of_each_stage(client: TestClient) -> None:
-    response = client.post("/v1/rags/docs/search", json={"question": "Which port?"}, headers=AUTH)
+    response = client.post("/v1/rags/docs/search", json={"question": "Which port?"})
     assert response.status_code == 200
     data = response.json()
     assert set(data) == {"query", "hits"}
@@ -760,7 +754,7 @@ def test_the_search_route_hits_have_the_chunk_form_and_the_scores_of_each_stage(
 
 
 def test_the_search_route_refuses_a_question_over_20000_characters(client: TestClient) -> None:
-    response = client.post("/v1/rags/docs/search", json={"question": "a" * 20001}, headers=AUTH)
+    response = client.post("/v1/rags/docs/search", json={"question": "a" * 20001})
     assert response.status_code == 400
 
 
@@ -776,27 +770,27 @@ def test_the_search_route_refuses_a_question_over_20000_characters(client: TestC
 )
 def test_the_removed_routes_are_404(client: TestClient, method: str, path: str) -> None:
     kwargs: dict[str, Any] = {"json": {"text": "x"}} if method == "post" else {}
-    response = getattr(client, method)(path, headers=AUTH, **kwargs)
+    response = getattr(client, method)(path, **kwargs)
     assert response.status_code == 404
     assert response.json() == {"error": {"message": "The route does not exist.", "type": "not_found_error"}}
 
 
 def test_the_manifest_of_a_rag_has_the_size_tokenizer(client: TestClient) -> None:
-    manifest = client.get("/v1/rags/docs", headers=AUTH).json()["manifest"]
+    manifest = client.get("/v1/rags/docs").json()["manifest"]
     assert manifest["size_tokenizer_id"].startswith("ministral-3-3b-tokenizer@")
     assert "generator_tokenizer_id" not in manifest
 
 
-# Other routes, auth and the Host guard.
+# Other routes and the Host guard.
 
 
 def test_rag_detail_and_listing(client: TestClient) -> None:
-    detail = client.get("/v1/rags/docs", headers=AUTH).json()
+    detail = client.get("/v1/rags/docs").json()
     assert detail["documents"] >= 1
     assert detail["manifest"]["dims"] == 384
     assert detail["manifest"]["embedder"] == "bge-small-en-v1.5"
-    assert client.get("/v1/rags/ghost", headers=AUTH).status_code == 404
-    assert {item["name"] for item in client.get("/v1/rags", headers=AUTH).json()["rags"]} >= {
+    assert client.get("/v1/rags/ghost").status_code == 404
+    assert {item["name"] for item in client.get("/v1/rags").json()["rags"]} >= {
         "docs",
         "manuals",
         "mixed",
@@ -804,37 +798,18 @@ def test_rag_detail_and_listing(client: TestClient) -> None:
 
 
 def test_unknown_rag_on_each_route_is_a_404(client: TestClient) -> None:
-    assert client.delete("/v1/rags/ghost/documents/x", headers=AUTH).status_code == 404
-    assert client.post("/v1/rags/ghost/search", json={"question": "q"}, headers=AUTH).status_code == 404
-    assert client.post("/v1/rags/ghost/rebuild", headers=AUTH).status_code == 404
+    assert client.delete("/v1/rags/ghost/documents/x").status_code == 404
+    assert client.post("/v1/rags/ghost/search", json={"question": "q"}).status_code == 404
+    assert client.post("/v1/rags/ghost/rebuild").status_code == 404
 
 
 def test_wrong_method_and_bad_json_use_the_error_body(client: TestClient) -> None:
-    wrong = client.get("/v1/context", headers=AUTH)
+    wrong = client.get("/v1/context")
     assert wrong.status_code == 405
     assert wrong.json()["error"]["type"] == "invalid_request_error"
-    bad = client.post("/v1/context", content=b"{bad", headers={**AUTH, "Content-Type": "application/json"})
+    bad = client.post("/v1/context", content=b"{bad", headers={"Content-Type": "application/json"})
     assert bad.status_code == 400
     assert "detail" not in bad.json()
-
-
-@pytest.mark.parametrize(
-    "authorization",
-    [
-        KEY,
-        f"bearer {KEY}",
-        f"Bearer {KEY}x",
-        f"Bearer {KEY[:-1]}",
-        f"Bearer  {KEY}",
-        f"Basic {KEY}",
-        "",
-        f"Bearer {KEY} ",
-    ],
-)
-def test_only_the_exact_bearer_key_is_accepted(client: TestClient, authorization: str) -> None:
-    response = client.get("/v1/rags", headers={"Authorization": authorization})
-    assert response.status_code == 401
-    assert response.json()["error"]["type"] == "authentication_error"
 
 
 @pytest.mark.parametrize(
@@ -855,12 +830,12 @@ def test_the_host_header_must_be_a_loopback_name(client: TestClient, host: str, 
     assert client.get("/health/live", headers={"Host": host}).status_code == status
 
 
-def test_a_browser_origin_is_refused_also_on_the_open_route(client: TestClient) -> None:
+def test_a_browser_origin_is_refused_on_every_route(client: TestClient) -> None:
     assert client.get("/health/live", headers={"Origin": "http://localhost:3000"}).status_code == 400
-    assert client.get("/v1/rags", headers={**AUTH, "Origin": "null"}).status_code == 400
+    assert client.get("/v1/rags", headers={"Origin": "null"}).status_code == 400
 
 
 @pytest.mark.parametrize("value", [True, "5", 5.0])
 def test_the_number_of_chunks_must_be_a_json_integer(client: TestClient, value: object) -> None:
     body = {"context": "ask", "question": "Which port?", "chunks": value}
-    assert client.post("/v1/context", json=body, headers=AUTH).status_code == 400
+    assert client.post("/v1/context", json=body).status_code == 400

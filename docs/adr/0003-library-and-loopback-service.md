@@ -1,8 +1,10 @@
 # 0003. Offer a Python library and a loopback HTTP service
 
-- Status: Accepted
+- Status: Accepted. Partly superseded by ADR 0015.
 - Date: 2026-11-07
 - Deciders: Project maintainer
+
+> Part of this decision is superseded on 2026-11-09 by [ADR 0015](0015-remove-service-access-key.md). The service has no access key. The other rules of this ADR stay in force. The text below is the history of the decision.
 
 ## Context
 
