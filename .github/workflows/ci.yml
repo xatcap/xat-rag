@@ -97,6 +97,14 @@ jobs:
       - run: uv run python tools/fetch_models.py
       - run: uv run python build/release.py package
       - run: uv run python build/release.py check-bundle
+      # When a job does not end well, the smoke test dumps the threads of the service with py-spy. py-spy is a CI
+      # tool only, and only Windows lets it read the service without root. A failed install does not stop the job.
+      - name: Install py-spy
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        run: |
+          uv tool install py-spy==0.4.3
+          uv tool dir --bin >> "$GITHUB_PATH"
       - run: uv run python build/release.py smoke-test
       # Only a release keeps the frozen folder, so that it publishes the same files that the smoke test used.
       - name: Archive the frozen folder
