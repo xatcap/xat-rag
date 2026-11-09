@@ -5,7 +5,7 @@ reranker = "ms-marco-minilm-l6-v2"
 
 [sources.main]
 kind = "pdf"
-max_chunk_tokens = 350
+max_chunk_tokens = 120
 
 [retrieval]
 keep = 6

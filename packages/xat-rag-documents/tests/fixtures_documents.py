@@ -1,13 +1,19 @@
-"""Builders of small PDF, DOCX and HTML files for the tests. They need no network and no files."""
+"""Builders of small PDF, DOCX, HTML and Excel files for the tests. They need no network and no files."""
 
 import io
 import zipfile
+from typing import Any
 
 import docx
-from pypdf import PdfReader, PdfWriter
+import openpyxl
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.pdfencrypt import StandardEncryption
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Table, TableStyle
 
 
-def make_pdf(pages: list[str], outline: list[tuple[str, int]] | None = None, password: str | None = None) -> bytes:
+def make_pdf(pages: list[str]) -> bytes:
     """Return a PDF with one text line for each page. An empty string gives a page with no text layer."""
     objects: list[bytes] = []
     kids = " ".join(f"{3 + i * 2} 0 R" for i in range(len(pages)))
@@ -35,18 +41,54 @@ def make_pdf(pages: list[str], outline: list[tuple[str, int]] | None = None, pas
     for offset in offsets:
         out.write(b"%010d 00000 n \n" % offset)
     out.write(b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (len(objects) + 1, xref))
-    data = out.getvalue()
-    if outline is None and password is None:
-        return data
-    writer = PdfWriter()
-    writer.append(PdfReader(io.BytesIO(data)))
-    for title, page in outline or []:
-        writer.add_outline_item(title, page)
-    if password is not None:
-        writer.encrypt(password, algorithm="RC4-128")
-    result = io.BytesIO()
-    writer.write(result)
-    return result.getvalue()
+    return out.getvalue()
+
+
+def make_layout_pdf(*, password: str | None = None, owner: str | None = None) -> bytes:
+    """Return a PDF with two heading levels on one page, a table, page headers and a paragraph across pages."""
+    styles = getSampleStyleSheet()
+    body = ParagraphStyle("Large", parent=styles["BodyText"], fontSize=15, leading=27)
+
+    def decorate(canvas: Any, document: Any) -> None:
+        canvas.setFont("Helvetica", 8)
+        canvas.drawString(50, 810, "Acme Handbook")
+        canvas.drawString(50, 25, f"Internal page {document.page}")
+
+    long_text = " ".join(f"Long sentence number {i} explains how retries of a capture work" for i in range(60))
+    output = io.BytesIO()
+    encrypt = StandardEncryption(password or "", ownerPassword=owner or "owner") if password is not None else None
+    document = SimpleDocTemplate(output, pagesize=A4, encrypt=encrypt)
+    grid = TableStyle([("GRID", (0, 0), (-1, -1), 0.5, colors.black)])
+    document.build(
+        [
+            Paragraph("Payments", styles["Heading1"]),
+            Paragraph("Retries", styles["Heading2"]),
+            Paragraph("Retries happen three times.", body),
+            Paragraph("Refunds", styles["Heading2"]),
+            Paragraph(long_text, body),
+            Table([["Code", "Meaning"], ["E1", "Declined"]], style=grid),
+        ],
+        onFirstPage=decorate,
+        onLaterPages=decorate,
+    )
+    return output.getvalue()
+
+
+def make_xlsx() -> bytes:
+    """Return an Excel file with two sheets."""
+    book = openpyxl.Workbook()
+    first = book.active
+    assert first is not None
+    first.title = "Rates"
+    first.append(["Code", "Rate"])
+    first.append(["A", 1])
+    first.append(["B", 2])
+    other = book.create_sheet("Other")
+    other.append(["x", "y"])
+    other.append([1, 2])
+    buffer = io.BytesIO()
+    book.save(buffer)
+    return buffer.getvalue()
 
 
 def make_docx(*, macro: bool = False) -> bytes:

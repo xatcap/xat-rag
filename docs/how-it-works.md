@@ -41,7 +41,7 @@ flowchart LR
 | Document | One file that the caller sends, with a `doc_id`. |
 | Chunk | One part of a document, with a stable `chunk_id`. A search returns chunks. |
 | Candidate | A chunk that a search found, before the final result. |
-| Span | The lines, pages or blocks of the document that hold a chunk. |
+| Span | The lines, pages, blocks or sheet rows of the document that hold a chunk. |
 
 ## Ingestion
 
@@ -52,7 +52,9 @@ flowchart TD
     upload["1. Receive the upload"] --> checks{"Is the request valid?"}
     checks -- "No" --> reject["HTTP error, no job"]
     checks -- "Yes" --> job["2. Queue a job and return 202"]
-    job --> parse["3. Parse the bytes for the kind"]
+    job --> same{"Is the upload the same as the stored one?"}
+    same -- "Yes" --> unchanged["Result: unchanged, no parsing"]
+    same -- "No" --> parse["3. Parse the bytes for the kind"]
     parse --> sanitize["4. Sanitize the extracted text"]
     sanitize --> chunk["5. Make the chunks, their IDs and their sizes"]
     chunk --> compare{"6. Is the content hash new or changed?"}
@@ -61,11 +63,14 @@ flowchart TD
     embed --> store["8. Write the document in one transaction"]
     skip --> store
     store --> more{"More documents?"}
-    more -- "Yes" --> parse
+    more -- "Yes" --> same
     more -- "No" --> checkpoint["9. Checkpoint the WAL file"]
     parse -- "Bad document" --> failed["Result: failed"]
     failed --> more
+    unchanged --> more
 ```
+
+The check of the same upload applies to Markdown, text, PDF, DOCX, HTML and Excel. Diff, JIRA and prompt files are always parsed.
 
 ### Step 1: Receive the upload
 
@@ -81,20 +86,35 @@ Each RAG has one worker thread. Jobs of one RAG run in order, and jobs of differ
 
 A parser reads the bytes and returns sections. No parser opens a path or a URL.
 
+Before the parse, xat-rag compares the upload with the stored upload of the same `doc_id`. The check covers these parts of the upload:
+
+- The bytes.
+- The `uri`, `title`, `version` and `metadata` fields.
+- The chunker version.
+
+If all parts match, the result is `unchanged`, and xat-rag does not parse the file.
+
 | Kind | How the parser finds the structure |
 |---|---|
 | Markdown | Headings give the heading path. |
-| Text | The whole document is one section. |
+| Text | The whole document is one section. Its paragraphs are the places where a large section splits. |
 | Diff | Each hunk of each file is one section. Binary files are skipped, with a note. |
 | JIRA | The summary and description are one section. Each comment is one section, and its parent is the description. |
 | Prompt | The whole file is one section. |
-| PDF | The outline gives the heading path when it exists. Otherwise, each page is one section. |
-| DOCX | The `Heading 1` to `Heading 9` styles give the heading path. Tables become pipe rows in their section. |
-| HTML | `h1` to `h6` give the heading path. Active and hidden elements are removed. |
+| PDF | Headings that the layout model finds give the heading path. A PDF with no heading is one section. |
+| DOCX | Heading styles give the heading path. Tables keep their rows. |
+| HTML | Headings give the heading path. Navigation and page footers are removed. |
+| Excel (`xlsx`) | Each sheet is one section, and the sheet name is its heading. A sheet with no table gives no section. |
 
-PDF has no OCR. xat-rag indexes only the pages whose sanitized text has at least `min_page_chars` non-space characters. The result of the document lists the skipped pages.
+PDF, DOCX, HTML and Excel files go through Docling. Docling finds the typed blocks of the file, such as headings and tables. xat-rag renders these blocks as one Markdown form, and the sections come from this form. xat-rag does not use the Markdown export of Docling, because that export has no source positions.
 
-One binary parse runs at a time in the process. Each document has a deadline of 60 seconds, and the parsers check it between pages, blocks, sections and comments. The [limits](api.md#limits) protect the service against bad files. A document that passes a limit gets a `failed` result, and the other documents continue.
+Page headers and footers are removed. A PDF section can start in the middle of a page, and it can cross pages. The pages of a PDF are only source positions.
+
+PDF has no OCR. xat-rag indexes only the pages that have at least `min_page_chars` non-space characters of text. The result of the document lists the skipped pages. A PDF with an empty password is indexed. Other encrypted PDF files are refused with the reason `encrypted`.
+
+The PDF parser needs the layout models in the models folder. The service checks them at start, when a RAG has a `pdf` source.
+
+One binary parse runs at a time in the process. Each document has a deadline of 60 seconds. For a PDF, the deadline is 2 seconds for each page, if that is longer. The parsers check the deadline between steps. The [limits](api.md#limits) protect the service against bad files. A document that passes a limit gets a `failed` result, and the other documents continue.
 
 ### Step 4: Sanitize
 
@@ -111,7 +131,22 @@ Sanitizing does not make the text safe for a prompt. The app must still escape i
 
 The structural chunker makes one chunk from each section. Each chunk has a `header` with its heading path, its `text`, its `span` and its `metadata`.
 
-A section that is too large is split again. The chunker splits at paragraph, line and word boundaries first. A single token that is still too large is cut at a character position. A chunk must fit two limits:
+For PDF, DOCX, HTML and Excel, the `text` is Markdown. It can hold lists, pipe tables and code fences. A word in the file cannot start a heading or a table, because the Markdown comes from the typed blocks.
+
+A section that is too large is split again. The chunker uses these rules, in this order, until each piece fits:
+
+1. It splits at blocks, list items and lines.
+2. It splits a block that is still too large at sentence ends.
+3. It splits at words.
+4. It splits at characters. This happens only for one token that is still too large.
+
+A table that fits stays whole. A larger table splits at its rows, and each piece repeats the header row. Code splits at its lines. The size limits always win over these rules.
+
+The embedder can also choose the split points. It does this for a too large section with four or more parts. The split then goes where the topic changes. A document with more than 20000 parts uses only the structure, and its result gets the note `semantic_split_unit_limit`.
+
+Pieces do not overlap. An evaluation found no gain from overlap, so overlap is off. The results are in `eval/split_comparison.json`.
+
+A chunk must fit two limits:
 
 | Limit | Measured with | Value |
 |---|---|---|
@@ -124,12 +159,13 @@ A chunk ID is `<doc_id>#<anchor>`. The anchor comes from the structure of the do
 
 | Source | Anchor | Example chunk ID |
 |---|---|---|
-| Markdown, DOCX, HTML, PDF with an outline | Heading path | `docs:orders.md#h/orders-service/ports-and-health` |
-| PDF without an outline | Absolute page number | `docs:manual.pdf#p/12` |
+| Markdown, DOCX, HTML, PDF and Excel | Heading path. Text before the first heading uses `h`. | `docs:orders.md#h/orders-service/ports-and-health` |
 | Text | `t` | `docs:notes.txt#t` |
 | Diff | File path and hunk number | `diffs:4f2a9c1.diff#f/src/OrderService.java/hunk/1` |
 | JIRA | `desc`, or `comment/<id>` | `jira:PROJ-123.json#comment/10023` |
 | Prompt | `prompt` | `prompts:style-guide.md#prompt` |
+
+For an Excel file, the sheet name is the heading. A PDF with no heading uses the anchor `h`, so its IDs look like `docs:manual.pdf#h` and `docs:manual.pdf#h/~s1`.
 
 If two sections get the same anchor, the later one gets `~2`, then `~3`. A split piece gets the ID `<section id>/~s<N>`.
 
@@ -156,6 +192,7 @@ Thus, a repeated upload is cheap, and a job that stopped does not repeat finishe
 `SqliteRagStore` writes each document in one transaction. A failure cannot leave half a document in the index. The transaction updates these parts:
 
 - The document and chunk rows.
+- The upload fingerprint, in the `ingest_state` table. A later upload of the same bytes can then return `unchanged`.
 - The keyword index, in SQLite FTS5.
 - The vector index, in sqlite-vec.
 

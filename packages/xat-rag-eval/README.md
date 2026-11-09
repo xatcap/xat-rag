@@ -15,6 +15,8 @@ The options are these:
 - `--baseline`: the baseline JSON to compare with. The file is required, unless the run writes it.
 - `--write-baseline`: writes the kinds of the report as the new baseline. It refuses when the invariant or determinism rules fail. It writes no timings.
 - `--models` and `--lock`: the models folder and the lock file. The defaults are `models` and `build/models.lock.json`.
+- `--no-semantic-split`: measures the split on the structure only. The embedder does not choose the split points.
+- `--overlap`: the share of a piece that repeats the end of the piece before it. The default is 0, which means no overlap.
 
 A golden set is JSONL. Each line is one case. Unknown fields are errors:
 

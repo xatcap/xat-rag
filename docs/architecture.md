@@ -19,14 +19,14 @@ flowchart TB
 
     subgraph adapters["Adapter layer"]
         parsers["xat-rag-parsers<br/>text kinds, chunker"]
-        documents["xat-rag-documents<br/>PDF, DOCX, HTML"]
+        documents["xat-rag-documents<br/>PDF, DOCX, HTML, Excel with Docling"]
         onnx["xat-rag-onnx<br/>embedder, reranker"]
         tokenizers["xat-rag-tokenizers<br/>size ruler"]
         sqlite["xat-rag-sqlite<br/>store, FTS5, sqlite-vec"]
     end
 
-    core["xat-rag-core<br/>domain model, ports, query, RRF, MMR, merge"]
-    offline["xat-rag-offline<br/>environment, tracing, network guard"]
+    core["xat-rag-core<br/>domain model, ports, Markdown form, query, RRF, MMR, merge"]
+    offline["xat-rag-offline<br/>environment and network guard"]
     files[("data/ one SQLite file for each RAG<br/>models/ locked ONNX files<br/>recipes/ TOML files")]
 
     app -- "HTTP on loopback" --> service
@@ -50,29 +50,29 @@ An arrow means "depends on". The `uv run lint-imports` command checks these depe
 | Host | `xat-rag-service`, `xat-rag-eval` | Give xat-rag to a caller. The service adds HTTP, request checks, upload parsing, jobs and the lifecycle. The evaluation package measures the retrieval quality. | Can import the composition layer. The composition layer cannot import the service. |
 | Composition | `xat-rag` | Load the recipes, connect the adapters and run the two use cases: ingestion and retrieval. It holds the public class `XatRag`. | Can import the adapters and the domain. |
 | Adapter | `xat-rag-parsers`, `xat-rag-documents`, `xat-rag-onnx`, `xat-rag-tokenizers`, `xat-rag-sqlite` | Connect one external technology to a port of the domain. | Can import the domain only. Adapters do not import each other. |
-| Domain | `xat-rag-core` | Hold the model, the ports, the errors, sanitizing, the query build, RRF, MMR and the merge. | Imports no other workspace package. |
-| Hardening | `xat-rag-offline` | Remove tracing and secret variables, and block network access outside loopback. | Imports no workspace package and no LangChain package. |
-
-No package can import `langchain`, `langchain_community`, `langchain_classic` or `tiktoken`.
+| Domain | `xat-rag-core` | Hold the model, the ports, the errors, sanitizing, the Markdown form, the spans, the query build, RRF, MMR and the merge. | Imports no other workspace package. |
+| Hardening | `xat-rag-offline` | Remove secret variables, and block network access outside loopback. | Imports no workspace package. |
 
 ## Ports and adapters
 
-The domain and the composition layer use these ports. A LangChain interface is the port where a matching interface exists.
+The domain and the composition layer use these ports. The ports are `Protocol` classes. `Embedder`, `Retriever`, `Reranker` and `TokenCounter` are in `xat_rag_core/ports.py`. `SectionParser` is in `xat_rag_core/parsing.py`.
 
 | Component | Port | Adapter |
 |---|---|---|
 | Parser | `SectionParser` | One parser for each source kind, in `xat-rag-parsers` and `xat-rag-documents` |
 | Chunker | None | `StructuralChunker` |
-| Embedder | LangChain `Embeddings` | `OnnxEmbeddings` |
-| Keyword search | LangChain `BaseRetriever` | `Fts5Retriever` |
-| Vector search | LangChain `BaseRetriever` | `VecRetriever` |
-| Reranker | LangChain `BaseDocumentCompressor` | `OnnxCrossEncoderCompressor` |
+| Embedder | `Embedder` | `OnnxEmbeddings` |
+| Keyword search | `Retriever` | `Fts5Retriever` |
+| Vector search | `Retriever` | `VecRetriever` |
+| Reranker | `Reranker` | `OnnxReranker` |
 | Store and manifest | None | `SqliteRagStore` and `IndexManifest` |
 | Size ruler | `TokenCounter` | `HfTokenCounter` |
 
+PDF, DOCX, HTML and Excel parsers use Docling. Each one returns sections. Docling is not visible outside `xat-rag-documents`.
+
 ## Start of the service
 
-The order matters, because the hardening must run before any LangChain import.
+The order matters, because the hardening must run before any other library import.
 
 1. `main` reads the data folder with the standard library only.
 2. `harden_process` cleans the environment and installs the network guard.
@@ -116,6 +116,7 @@ sequenceDiagram
 
 - Each RAG has one worker thread. Jobs of one RAG run in order, and jobs of different RAGs run in parallel.
 - SQLite runs in WAL mode, so questions continue during ingestion.
+- An upload that matches the stored upload returns `unchanged`, and it is not parsed. This applies to Markdown, text, PDF, DOCX, HTML and Excel.
 - A bad document gets a `failed` result. The other documents continue.
 - Jobs live in memory, so a restart loses them. The indexes stay correct, because each document is one transaction.
 
@@ -155,11 +156,11 @@ sequenceDiagram
 
 ## Index safety
 
-Each RAG is one SQLite file. The file has a manifest that records the embedder, the chunkers, the tokenizer versions and a hash of the recipe fields that change the index.
+Each RAG is one SQLite file. The file has a manifest that records the embedder, the chunkers, the tokenizer versions and a hash of the recipe fields that change the index. A chunker version includes the parser version. For Markdown, text, PDF, DOCX, HTML and Excel, it also includes the split rules.
 
 xat-rag compares the manifest with the loaded models and recipes. On a mismatch, it refuses the index and returns `index_mismatch_error`. It never embeds again without a request. The caller rebuilds the RAG and uploads the documents again.
 
-The model files are locked by `build/models.lock.json`. xat-rag checks their size and sha256 at start, and it never downloads a file at runtime.
+The model files are locked by `build/models.lock.json`. xat-rag checks their size and sha256 at start, and it never downloads a file at runtime. The PDF layout models are checked too, when a RAG has a PDF source.
 
 ## Boundaries
 
@@ -171,4 +172,4 @@ The model files are locked by `build/models.lock.json`. xat-rag checks their siz
 | Sanitize control characters. | Escape the text, and build the prompt. |
 | Give a stable ID for each chunk. | Call the LLM and check the citations. |
 
-xat-rag accepts only loopback connections, sends no telemetry and has no authentication. Each program on the same machine can use the service. The text of a chunk is untrusted, so the app must not treat it as instructions.
+xat-rag accepts only loopback connections, and it has no authentication. Each program on the same machine can use the service. xat-rag sends no telemetry. ONNX Runtime telemetry is off, and on Windows ONNX Runtime may still send one event at its first start. The text of a chunk is untrusted, so the app must not treat it as instructions.

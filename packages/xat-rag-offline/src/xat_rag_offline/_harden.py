@@ -1,6 +1,7 @@
 """The entry point for service mode: `harden_process`."""
 
 import os
+import platform
 from collections.abc import Callable, Collection
 from pathlib import Path
 
@@ -19,6 +20,9 @@ def harden_process(
     whole process and installs an audit hook that cannot be removed.
     """
     harden_environment(os.environ, data_folder / "hf")
+    # `platform` starts the programs `file` and `uname` once, and keeps the result. Docling asks for it on import, and
+    # the guard refuses a new process, so the result must exist before the guard starts.
+    platform.platform()
     guard = NetworkGuard(allowed_extensions, on_block)
     guard.install()
     return guard

@@ -19,6 +19,6 @@ The `XatRag` facade has these methods:
 | `retrieve(ContextRequest)` | Returns the ranked chunks of a context. Each chunk has its text, its header, its source and its metadata. It returns the omitted candidates too. |
 | `context_recipe(context)` | Returns the recipe of a context. |
 
-The public API uses xat-rag types only. The types are `RetrievalResult`, `RetrievedChunk`, `ChunkSource`, `SearchHit`, `OmittedItem` and `DocumentResult`. The planned `xat_rag.langchain` module is not in v0.1.
+The public API uses xat-rag types only. The types are `RetrievalResult`, `RetrievedChunk`, `ChunkSource`, `SearchHit`, `OmittedItem` and `DocumentResult`.
 
-The library calls no LLM. It builds no prompt and it escapes no text. Library mode does not change the process. It does not call `harden_process`, and it turns tracing off only for its own calls.
+The library calls no LLM. It builds no prompt and it escapes no text. Library mode does not call `harden_process`, so it does not change the environment of the process. One exception exists: when xat-rag loads, it sets `ORT_DISABLE_TELEMETRY`.

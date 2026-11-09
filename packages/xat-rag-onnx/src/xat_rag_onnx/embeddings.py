@@ -1,10 +1,8 @@
-"""`OnnxEmbeddings`: the embedder of xat-rag, as a LangChain `Embeddings`."""
+"""`OnnxEmbeddings`: the embedder of xat-rag."""
 
 from collections.abc import Sequence
-from typing import override
 
 import numpy as np
-from langchain_core.embeddings import Embeddings
 from numpy.typing import NDArray
 from xat_rag_core.errors import StageError
 
@@ -13,11 +11,8 @@ from xat_rag_onnx.session import MAX_LENGTH, OnnxModel
 BGE_QUERY_PREFIX = "Represent this sentence for searching relevant passages: "
 
 
-class OnnxEmbeddings(Embeddings):
-    """A BERT-family embedder with CLS pooling and L2 normalization (v1: `bge-small-en-v1.5`).
-
-    xat-rag calls `embed_documents_np` and `embed_query_np`. The list methods exist for LangChain callers.
-    """
+class OnnxEmbeddings:
+    """A BERT-family embedder with CLS pooling and L2 normalization (v1: `bge-small-en-v1.5`)."""
 
     def __init__(
         self,
@@ -69,11 +64,3 @@ class OnnxEmbeddings(Embeddings):
         """
         room = MAX_LENGTH - 2 - self.model.count_plain(self.query_prefix)
         return self._embed([self.query_prefix + self.model.truncate(text, room)])[0]
-
-    @override
-    def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        return [[float(value) for value in row] for row in self.embed_documents_np(texts)]
-
-    @override
-    def embed_query(self, text: str) -> list[float]:
-        return [float(value) for value in self.embed_query_np(text)]

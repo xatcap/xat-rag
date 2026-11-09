@@ -26,6 +26,7 @@ EMBEDDERS: Mapping[str, EmbedderSpec] = MappingProxyType({"bge-small-en-v1.5": E
 _ONNX_FILES = frozenset({"model.onnx", "tokenizer.json"})
 RERANKERS: frozenset[str] = frozenset({"ms-marco-minilm-l6-v2"})
 SIZE_TOKENIZER = "ministral-3-3b-tokenizer"
+LAYOUT_MODELS = ("docling-project--docling-layout-heron", "docling-project--docling-models")
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,9 +54,13 @@ def load_models(
     embedders: set[str],
     rerankers: set[str],
     threads: int = 0,
+    layout_models: bool = False,
 ) -> LoadedModels:
     """Check the locked files of the named models, and load them. Raise `ConfigError` on any problem."""
     locks = load_lock(lock_file)
+    if layout_models:  # Docling loads these files itself, on the first PDF file.
+        for name in LAYOUT_MODELS:
+            verify_model(models_folder / name, _lock_entry(locks, name), cache_file)
     loaded_embedders: dict[str, OnnxEmbeddings] = {}
     sha: dict[str, str] = {}
     for name in sorted(embedders):

@@ -81,6 +81,56 @@
           "sha256": "4a05af595aa11c3436d3b68a616219ae99b303426f708a12b31bc9ce32530728"
         }
       ]
+    },
+    {
+      "id": "docling-project--docling-layout-heron",
+      "role": "layout",
+      "repo": "docling-project/docling-layout-heron",
+      "revision": "8f39ad3c0b4c58e9c2d2c84a38465abf757272d8",
+      "license": "Apache-2.0",
+      "notes": "Page layout model of Docling.",
+      "files": [
+        {
+          "path": "model.safetensors",
+          "source": "model.safetensors",
+          "size": 171658996,
+          "sha256": "00333a43451945aaf89db8ca9c0a17e75d1537c17db60fdb91aa95f4c7929e0c"
+        },
+        {
+          "path": "config.json",
+          "source": "config.json",
+          "size": 3268,
+          "sha256": "fdea30805ce2f5666b147fca941dcdd27ad468e27d6ed21902207d3da056a97d"
+        },
+        {
+          "path": "preprocessor_config.json",
+          "source": "preprocessor_config.json",
+          "size": 444,
+          "sha256": "cd38cd59999e7a95d68e487fbe5132df3d4e5c32a0836add57e6126ba0c4eaf1"
+        }
+      ]
+    },
+    {
+      "id": "docling-project--docling-models",
+      "role": "table-structure",
+      "repo": "docling-project/docling-models",
+      "revision": "fc0f2d45e2218ea24bce5045f58a389aed16dc23",
+      "license": "CDLA-Permissive-2.0",
+      "notes": "TableFormer table structure model of Docling, tag v2.3.0.",
+      "files": [
+        {
+          "path": "model_artifacts/tableformer/accurate/tableformer_accurate.safetensors",
+          "source": "model_artifacts/tableformer/accurate/tableformer_accurate.safetensors",
+          "size": 212758388,
+          "sha256": "2a7d6c924b3cd12fb99a09280ca9c33a89c5d60b93253617d2e088c1a40374d9"
+        },
+        {
+          "path": "model_artifacts/tableformer/accurate/tm_config.json",
+          "source": "model_artifacts/tableformer/accurate/tm_config.json",
+          "size": 7060,
+          "sha256": "984e122ceb8ccf84d84c9d2882f6f2302a44b4f1e577babd6289892c36f3cffd"
+        }
+      ]
     }
   ]
 }

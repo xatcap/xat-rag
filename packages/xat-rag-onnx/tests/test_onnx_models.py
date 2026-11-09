@@ -3,11 +3,10 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from xat_rag_core import lc_codec
 from xat_rag_core.errors import ConfigError, StageError
 from xat_rag_core.ids import chunk_content_hash
-from xat_rag_core.model import Chunk, LineSpan, SourceKind
-from xat_rag_onnx import OnnxCrossEncoderCompressor, OnnxEmbeddings, OnnxModel, load_lock, verify_model
+from xat_rag_core.model import Candidate, Chunk, LineSpan, SourceKind
+from xat_rag_onnx import OnnxEmbeddings, OnnxModel, OnnxReranker, load_lock, verify_model
 
 ROOT = Path(__file__).resolve().parents[3]
 MODELS = ROOT / "models"
@@ -21,10 +20,8 @@ def embedder() -> OnnxEmbeddings:
 
 
 @pytest.fixture(scope="module")
-def reranker() -> OnnxCrossEncoderCompressor:
-    return OnnxCrossEncoderCompressor(
-        model=OnnxModel(MODELS / "ms-marco-minilm-l6-v2", threads=1), model_id="minilm", top_n=2
-    )
+def reranker() -> OnnxReranker:
+    return OnnxReranker(model=OnnxModel(MODELS / "ms-marco-minilm-l6-v2", threads=1), model_id="minilm", top_n=2)
 
 
 def test_lock_and_verify(tmp_path: Path) -> None:
@@ -53,7 +50,7 @@ def test_embeddings_are_normalized_and_relevant(embedder: OnnxEmbeddings) -> Non
     query = embedder.embed_query_np("how to restart the service on linux")
     assert float(docs[0] @ query) > float(docs[1] @ query)
     assert np.array_equal(embedder.embed_documents_np(["same"]), embedder.embed_documents_np(["same"]))
-    assert len(embedder.embed_query("x")) == 384
+    assert len(embedder.embed_query_np("x")) == 384
 
 
 def test_too_long_text_is_an_error(embedder: OnnxEmbeddings) -> None:
@@ -62,23 +59,23 @@ def test_too_long_text_is_an_error(embedder: OnnxEmbeddings) -> None:
     assert embedder.count_document_tokens("hello world") == 4
 
 
-def _document(chunk_id: str, text: str) -> object:
+def _document(chunk_id: str, text: str) -> Candidate:
     chunk = Chunk(
         chunk_id, "d", "r", SourceKind.TEXT, "section", "h", text, LineSpan(1, 1), chunk_content_hash("h", text), "v"
     )
-    return lc_codec.chunk_to_document(chunk)
+    return Candidate(chunk)
 
 
-def test_reranker_orders_and_marks_truncation(reranker: OnnxCrossEncoderCompressor) -> None:
+def test_reranker_orders_and_marks_truncation(reranker: OnnxReranker) -> None:
     documents = [
         _document("a", "The cafeteria menu has pasta."),
         _document("b", "OrderNotFoundException happens when the order id is unknown in OrderService."),
         _document("c", "word " * 700),
     ]
-    result = list(reranker.compress_documents(documents, "Why does OrderService throw OrderNotFoundException?"))  # type: ignore[arg-type]
+    result = list(reranker.rerank(documents, "Why does OrderService throw OrderNotFoundException?"))  # type: ignore[arg-type]
     assert len(result) == 2
-    assert lc_codec.chunk_id_of(result[0]) == "b"
-    scores = {lc_codec.chunk_id_of(d): lc_codec.document_to_candidate(d).scores for d in result}
+    assert result[0].chunk_id == "b"
+    scores = {d.chunk_id: d.scores for d in result}
     assert all(s.rerank_score is not None for s in scores.values())
     _, truncated = reranker.score("q", ["word " * 700, "short"])
     assert truncated == [True, False]

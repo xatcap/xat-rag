@@ -5,7 +5,7 @@ import sys
 import textwrap
 from pathlib import Path
 
-from xat_rag_offline import TRACING_VARIABLES, harden_environment
+from xat_rag_offline import harden_environment
 
 # `harden_process` installs an audit hook that cannot be removed. These tests run it in a child process.
 _CHILD = textwrap.dedent(
@@ -16,9 +16,10 @@ _CHILD = textwrap.dedent(
 
     data = sys.argv[1]
     guard = harden_process(Path(data))
+    import platform
+    platform.platform()  # A new process here would be refused by the guard.
     result = {
         "hf_home": os.environ.get("HF_HOME"),
-        "tracing": os.environ.get("LANGSMITH_TRACING"),
         "offline": os.environ.get("HF_HUB_OFFLINE"),
         "enabled": guard.enabled,
         "token_left": "HF_TOKEN" in os.environ,
@@ -48,10 +49,9 @@ def test_harden_process_sets_hf_home_below_the_data_folder(tmp_path: Path) -> No
     assert result["hf_home"] == str(tmp_path / "hf")
 
 
-def test_harden_process_removes_secrets_and_turns_tracing_off(tmp_path: Path) -> None:
-    result = _run(str(tmp_path), {"HF_TOKEN": "t", "LANGSMITH_TRACING": "true"})
+def test_harden_process_removes_secrets_and_sets_offline_mode(tmp_path: Path) -> None:
+    result = _run(str(tmp_path), {"HF_TOKEN": "t"})
     assert result["token_left"] is False
-    assert result["tracing"] == "false"
     assert result["offline"] == "1"
     assert result["enabled"] is True
 
@@ -82,7 +82,7 @@ def test_all_variables_that_point_to_another_server_are_deleted() -> None:
         "HOME": "/home/u",
     }
     harden_environment(env, hf_home=None)
-    assert set(env) - set(TRACING_VARIABLES) >= {"HOME"}
+    assert set(env) >= {"HOME"}
     for name in (
         "HF_ENDPOINT",
         "OPENAI_BASE_ENDPOINT",
@@ -101,7 +101,7 @@ def test_own_settings_are_not_deleted_by_the_suffix_rule() -> None:
 
 
 def test_environment_hardening_can_run_twice() -> None:
-    env = {"LANGSMITH_TRACING": "true"}
+    env = {"HF_TOKEN": "t"}
     harden_environment(env, hf_home=Path("/d/hf"))
     snapshot = dict(env)
     harden_environment(env, hf_home=Path("/d/hf"))

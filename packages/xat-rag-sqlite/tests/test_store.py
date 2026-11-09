@@ -1,3 +1,4 @@
+import hashlib
 import sqlite3
 import threading
 from pathlib import Path
@@ -5,7 +6,6 @@ from pathlib import Path
 import numpy as np
 import pytest
 import xat_rag_sqlite.store as store_module
-from langchain_core.embeddings import DeterministicFakeEmbedding
 from xat_rag_core.errors import IndexMismatchError, InternalError
 from xat_rag_core.ids import chunk_content_hash
 from xat_rag_core.model import Chunk, LineSpan, Scalar, SourceDocument, SourceKind
@@ -15,7 +15,23 @@ from xat_rag_sqlite.manifest import EmbedderInfo, IndexManifest
 from xat_rag_sqlite.store import SqliteRagStore, UpsertStatus
 
 DIMS = 16
-EMBED = DeterministicFakeEmbedding(size=DIMS)
+
+
+class _FakeEmbedding:
+    """Gives each text a fixed random vector."""
+
+    def __init__(self, size: int) -> None:
+        self._size = size
+
+    def embed_query(self, text: str) -> list[float]:
+        seed = int(hashlib.sha256(text.encode("utf-8")).hexdigest(), 16) % 10**8
+        return list(np.random.default_rng(seed).normal(size=self._size))
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return [self.embed_query(text) for text in texts]
+
+
+EMBED = _FakeEmbedding(size=DIMS)
 
 
 def manifest(**changes: object) -> IndexManifest:

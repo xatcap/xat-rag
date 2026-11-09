@@ -2,13 +2,14 @@
 
 The embedder and the reranker of xat-rag. ONNX Runtime runs them in the process, on the CPU.
 
-| Class | LangChain interface | Model (v1) |
+| Class | Port | Model (v1) |
 |---|---|---|
-| `OnnxEmbeddings` | `Embeddings` | `bge-small-en-v1.5`, 384 dimensions, CLS pooling, normalized |
-| `OnnxCrossEncoderCompressor` | `BaseDocumentCompressor` | `ms-marco-MiniLM-L6-v2` |
+| `OnnxEmbeddings` | `Embedder` | `bge-small-en-v1.5`, 384 dimensions, CLS pooling, normalized |
+| `OnnxReranker` | `Reranker` | `ms-marco-MiniLM-L6-v2` |
 
 Rules:
 
+- The module turns off ONNX Runtime telemetry when it loads. It sets `ORT_DISABLE_TELEMETRY` and calls `disable_telemetry_events()`.
 - Model files come only from a local folder. `verify_model` checks the size and sha256 of each runtime file against the model lock file. From source, this file is `build/models.lock.json`. In a release, it is `models/models.lock.json`.
 - Tokenizers load with `Tokenizer.from_file`, never with `from_pretrained`.
 - A query longer than the model input is cut. A document longer than 512 tokens is an error, because the chunker must split it first.

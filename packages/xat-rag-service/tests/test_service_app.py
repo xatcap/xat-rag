@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from pypdf import PdfWriter
+from reportlab.pdfgen.canvas import Canvas
 from service_setup import MODELS, multipart, write_setup
 from xat_rag import Settings, XatRag
 from xat_rag_service.app import create_app
@@ -153,10 +153,10 @@ def test_query_build_and_delete(client: TestClient) -> None:
 
 
 def test_scanned_pdf_report_in_job(client: TestClient) -> None:
-    writer = PdfWriter()
-    writer.add_blank_page(612, 792)
     buffer = io.BytesIO()
-    writer.write(buffer)
+    canvas = Canvas(buffer)
+    canvas.showPage()
+    canvas.save()
     fields = json.dumps([{"doc_id": "manuals:scan.pdf", "kind": "pdf", "part": "p"}])
     body, content_type = multipart(fields, {"p": buffer.getvalue()})
     job = _wait(

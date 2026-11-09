@@ -40,7 +40,7 @@ Each error has this body:
 | `invalid_request_error` | 405 | A route is used with the wrong method. | Correct the method. |
 | `invalid_request_error` | 413 | A body is larger than its limit. | Send less data. |
 | `not_found_error` | 404 | An unknown route, RAG, document, job or context. | Correct the name. |
-| `index_mismatch_error` | 409 | The index does not match the models or the recipe. | Rebuild the RAG and upload its documents again. |
+| `index_mismatch_error` | 409 | The index does not match the models or the recipe. After an upgrade, a RAG with Markdown, text, PDF, DOCX or HTML sources has this error. | Rebuild the RAG and upload its documents again. |
 | `service_unavailable_error` | 503 | With no `Retry-After`, the service is degraded. With `Retry-After: 1`, the RAG is being rebuilt or the service is stopping. | Restart the service, or wait. |
 | `overloaded_error` | 503 | The request pool is full (`Retry-After: 1`), or the upload queue is full (`Retry-After: 5`). | Wait, and send the request again. |
 | `stage_timeout_error` | 504 | A stage passed its time limit. The message names the stage. | Send the request again, or increase the limit in the context recipe. |
@@ -102,7 +102,7 @@ The route returns 503 when a document ran too long and the service is degraded:
  "manifest": {"index_format": 1, "embedder": "bge-small-en-v1.5", "embedder_sha256": "...",
               "dims": 384, "lexical_tokenizer": "code-v1",
               "size_tokenizer_id": "ministral-3-3b-tokenizer@99cf274236c6",
-              "index_hash": "...", "chunkers": {"markdown": "markdown-v2+lcts1.1.3"}}}
+              "index_hash": "...", "chunkers": {"markdown": "markdown-v3+blocks1+sem1-bge-small-en-v1.5-..."}}}
 ```
 
 ### `POST /v1/rags/{rag}/rebuild`
@@ -141,18 +141,18 @@ Deletes one document and its chunks. Percent-encode the `doc_id`. Returns `{"del
 | `done` | The number of results that exist. |
 | `error_type` of a job | Set when the job fails. |
 | `notes` of a job | Can hold `checkpoint_failed:<error type>`. |
-| `status` of a result | `created`, `updated`, `unchanged` or `failed` |
-| `pages_total`, `pages_indexed`, `skipped_pages` | PDF only. Each skipped page has `page`, `label` and `reason`. The reason is `no_text`, `extract_error` or `page_text_limit`. |
-| `notes` of a result | `binary_file_skipped`, `file_without_hunks_skipped`, `comments_skipped`, `headers_footers_skipped` or `tracked_insertions_kept` |
+| `status` of a result | `created`, `updated`, `unchanged` or `failed`. `unchanged` means that the upload matched the stored upload, and the file was not parsed. |
+| `pages_total`, `pages_indexed`, `skipped_pages` | PDF only. Each skipped page has `page`, `label` and `reason`. The reason is `no_text` or `page_text_limit`. |
+| `notes` of a result | `binary_file_skipped` and `file_without_hunks_skipped` for diff. `semantic_split_unit_limit` for a document with more than 20000 parts, which uses only the structure to split. |
 
 A failed result has an `error_type`, a `reason` and a `message`. The reasons of `parse_error` are these:
 
 | Reason | Cause |
 |---|---|
 | `invalid` | The bytes are not the kind of document, or the document has no text. |
-| `encrypted` | The PDF is encrypted. |
+| `encrypted` | The PDF needs a password. A PDF that opens with an empty password is indexed. |
 | `no_text_layer` | The PDF has no page with text. |
-| `unsupported_media_type` | The DOCX file has macros. |
+| `unsupported_media_type` | The DOCX or Excel file has macros. |
 | `too_large` | The document is larger than its limit. |
 | `limit_exceeded` | A parser limit was passed. The message names the limit. |
 | `parse_timeout` | The parse deadline passed. |
@@ -239,11 +239,11 @@ Shows the query that a question makes. The body is the same as for search.
 |---|---|---|
 | `chunk_id` | string | The stable ID of the chunk, as `<doc_id>#<anchor>`. |
 | `parent_id` | string or `null` | A JIRA comment has the `desc` chunk of its issue as its parent. Otherwise `null`. |
-| `kind` | string | `section`, `hunk`, `description`, `comment`, `prompt` or `page`. |
+| `kind` | string | `section`, `hunk`, `description`, `comment` or `prompt`. |
 | `score` | number | The rerank score, or the RRF score when the RAG has no reranker. Higher is better. A rerank score is not a probability and has no fixed range. |
 | `size_tokens` | integer | The size from the fixed size ruler of xat-rag. It is not a count of your LLM tokens. |
 | `header` | string | The heading path or the title. Untrusted text. |
-| `text` | string | The stored text, with no tags and no escaping. Untrusted text. |
+| `text` | string | The stored text, with no tags and no escaping. For PDF, DOCX, HTML and Excel, the text is Markdown. Untrusted text. |
 | `source` | object | Where the chunk came from. |
 | `metadata` | object | Parser fields and caller fields, with scalar values. Untrusted text. xat-rag does not filter on metadata. |
 
@@ -253,19 +253,22 @@ The `source` object has these fields:
 |---|---|
 | `rag` | The name of the RAG. |
 | `doc_id` | The document ID that the caller sent. |
-| `source_kind` | `markdown`, `text`, `diff`, `jira`, `prompt`, `pdf`, `docx` or `html`. |
+| `source_kind` | `markdown`, `text`, `diff`, `jira`, `prompt`, `pdf`, `docx`, `html` or `xlsx`. |
 | `uri` | The link that the caller sent, or an empty string. A PDF chunk ends with `#page=N`. |
 | `title` | The title of the document. |
 | `version` | The version that the caller sent, or an empty string. |
 | `span` | The part of the document that holds the chunk. |
 
-The `span` has one of three forms:
+The `span` has one of these forms:
 
 | `type` | Source kinds | Other fields |
 |---|---|---|
-| `line` | Markdown, text, diff, JIRA, prompt, HTML | `line_start`, `line_end` |
+| `line` | Markdown, text, diff, JIRA, prompt | `line_start`, `line_end` |
 | `page` | PDF | `page_start`, `page_end`, `label_start`, `label_end` |
-| `block` | DOCX | `block_start`, `block_end` |
+| `block` | DOCX, HTML | `block_start`, `block_end` |
+| `cell` | Excel | `sheet`, `row_start`, `row_end` |
+
+This version changes the HTML span from `line` to `block`. A caller that reads HTML line numbers must change. For a PDF, the labels are the page numbers as text, such as `"12"`. xat-rag does not read custom page labels. For DOCX and HTML, the block numbers count the items of the body in body order, from 1. The rows of an Excel span are 1-based row numbers of the sheet.
 
 ## Upload format
 
@@ -286,7 +289,7 @@ A part must not have a `Content-Transfer-Encoding` header.
 | `version` | string, at most 256 characters | No | A version, for example a commit SHA. |
 | `metadata` | object of scalar values | No | Metadata for each chunk of the document. |
 
-An unknown field is an error. An upload of a document with an existing `doc_id` updates the document. xat-rag embeds only the chunks that are new or changed.
+An unknown field is an error. An upload of a document with an existing `doc_id` updates the document. xat-rag embeds only the chunks that are new or changed. If the bytes and the fields match the stored upload, the result is `unchanged`, and the file is not parsed. This applies to Markdown, text, PDF, DOCX, HTML and Excel.
 
 ```bash
 curl -s -X PUT "$URL/v1/rags/docs/documents" \
@@ -306,9 +309,9 @@ Recipes are TOML files in `rags/*.toml` and `contexts/*.toml`. The file name mus
 | `rag.format` | `1` | `1` | |
 | `rag.embedder` | Required | `bge-small-en-v1.5` | Yes |
 | `rag.reranker` | `"none"` | `none`, `ms-marco-minilm-l6-v2` | No |
-| `sources.<name>.kind` | Required | A source kind. One source for each kind. | Yes |
+| `sources.<name>.kind` | Required | `markdown`, `text`, `diff`, `jira`, `prompt`, `pdf`, `docx`, `html` or `xlsx`. One source for each kind. | Yes |
 | `sources.<name>.max_chunk_tokens` | `350` | 32 to 2000 | Yes |
-| `sources.<name>.min_page_chars` | `20` | 0 to 10000 | Yes |
+| `sources.<name>.min_page_chars` | `20` | 0 to 10000. PDF only. | Yes |
 | `retrieval.lexical_k` | `40` | 1 to 1000 | No |
 | `retrieval.dense_k` | `40` | 1 to 1000 | No |
 | `retrieval.rrf_k` | `60` | 1 to 1000 | No |
@@ -351,7 +354,7 @@ The service reads environment variables. The names are not case-sensitive. In th
 
 From source, no default applies to the data, recipes, models and lock file settings. They are required. A path setting with an empty value uses its default.
 
-The service removes `LANGSMITH_*`, `LANGCHAIN_*` and each variable whose name ends in `_API_KEY`, `_TOKEN`, `_ENDPOINT` or `_ENDPOINTS`, except the `XatRag__*` variables.
+The service removes each variable whose name ends in `_API_KEY`, `_TOKEN`, `_ENDPOINT` or `_ENDPOINTS`, except the `XatRag__*` variables.
 
 ## Lifecycle
 
@@ -360,7 +363,7 @@ The service starts in this order:
 1. It reads its settings.
 2. It takes the lock of the data folder. A second service with the same folder stops with exit code 2.
 3. It deletes a stale ready file.
-4. It loads the recipes, the models and the indexes.
+4. It loads the recipes, the models and the indexes. It checks the PDF layout models when a RAG has a `pdf` source.
 5. It starts to listen.
 6. It writes the ready file.
 
@@ -385,23 +388,25 @@ The service stops on `SIGINT`, on `SIGTERM`, or when standard input closes with 
 | `chunks` | 1 to 100 | 400 |
 | Stage time | See the `limits` keys of the [context recipe](#context-recipe). | 504 `stage_timeout_error` |
 | Text document (`markdown`, `text`, `diff`, `jira`, `prompt`) | 4 MiB | `parse_error`, `too_large` |
+| Markdown characters in one document | 20 million | `parse_error`, `limit_exceeded` |
 | HTML document | 8 MiB | `parse_error`, `too_large` |
-| PDF or DOCX document | 32 MiB | `parse_error`, `too_large` |
-| Parse time of one document | 60 seconds | `parse_error`, `parse_timeout` |
+| PDF, DOCX or Excel document | 32 MiB | `parse_error`, `too_large` |
+| Parse time of one document | 60 seconds. For a PDF, 2 seconds for each page, if that is longer. | `parse_error`, `parse_timeout` |
 | PDF pages | 2000 | `parse_error`, `limit_exceeded` |
 | PDF characters in one page | 200000 | The page is skipped, with the reason `page_text_limit`. |
-| PDF characters in one document | 20 million | `parse_error`, `limit_exceeded` |
-| DOCX zip entries | 10000 | `parse_error`, `limit_exceeded` |
-| DOCX uncompressed size | 256 MiB in total, 64 MiB for `word/document.xml` | `parse_error`, `limit_exceeded` |
-| DOCX compression ratio | 100 for each large entry | `parse_error`, `limit_exceeded` |
-| DOCX grid span | 64 | `parse_error`, `limit_exceeded` |
+| Characters in one document (PDF, DOCX, HTML or Excel) | 20 million | `parse_error`, `limit_exceeded` |
+| Zip entries (DOCX or Excel) | 10000 | `parse_error`, `limit_exceeded` |
+| Uncompressed size (DOCX or Excel) | 256 MiB in total, 64 MiB for the main part | `parse_error`, `limit_exceeded` |
+| Compression ratio (DOCX or Excel) | 100 for each entry over 1 MB | `parse_error`, `limit_exceeded` |
+| Table grid span (DOCX) | 64 | `parse_error`, `limit_exceeded` |
 | HTML `<` characters | 500000 | `parse_error`, `limit_exceeded` |
+| Parts of one document for the split points | 20000 | The split uses only the structure. The result has the note `semantic_split_unit_limit`. |
 
-If a parse runs longer than twice the deadline plus 300 seconds, the service becomes degraded. Uploads then get 503 until a restart.
+The service becomes degraded when one document runs too long. The limit is twice the longer of the parse deadline and 4000 seconds, plus 300 seconds. The 4000 seconds is the deadline of the largest PDF, which has 2000 pages at 2 seconds each. With the default deadline, the limit is 8300 seconds. Uploads then get 503 until a restart.
 
 ## Python library
 
-The library runs in your process, with no HTTP service. It does not change the process, and it turns tracing off only for its own calls.
+The library runs in your process, with no HTTP service. When you import xat-rag, it sets the environment variable `ORT_DISABLE_TELEMETRY=1`. It also calls the ONNX Runtime function that turns off telemetry events. If your app imports ONNX Runtime before xat-rag, the variable has no effect, and ONNX Runtime can send a first telemetry event. Import xat-rag before ONNX Runtime.
 
 ```python
 from xat_rag import (ChunkSource, ContextRequest, DocumentResult, RetrievalResult,
@@ -413,12 +418,14 @@ from xat_rag_core.model import RawDocument, SourceKind
 
 | Field | Type | Default | Meaning |
 |---|---|---|---|
-| `data_folder` | `Path` | Required | One SQLite file for each RAG, and the model check cache. |
+| `data_folder` | `Path` | Required | One SQLite file for each RAG, and the model check cache. The files hold copies of your text. |
 | `recipes_folder` | `Path` | Required | The folder with `rags/` and `contexts/`. |
 | `models_folder` | `Path` | Required | The model files. |
 | `lock_file` | `Path` | Required | The model lock file. |
 | `threads` | `int` | `0` | The ONNX Runtime threads. |
 | `parse_deadline_seconds` | `float` | `60.0` | The parse deadline for each document. |
+| `semantic_split` | `bool` | `True` | Lets the embedder choose the split points of large sections. For evaluation. Keep the default. |
+| `overlap_share` | `float` | `0.0` | The share of a piece that repeats the end of the piece before it. For evaluation. Keep the default. |
 
 ### `XatRag`
 
@@ -440,7 +447,17 @@ Failures raise a subclass of `XatRagError` from `xat_rag_core.errors`. The `erro
 
 ### Input types
 
-`RawDocument(doc_id, rag, source_kind, data, uri="", title="", version="", media_type="", metadata={})`. The `data` field holds the bytes. `source_kind` is a `SourceKind`: `MARKDOWN`, `TEXT`, `DIFF`, `JIRA`, `PROMPT`, `PDF`, `DOCX` or `HTML`.
+`RawDocument(doc_id, rag, source_kind, data, uri="", title="", version="", media_type="", metadata={})`. The `data` field holds the bytes. `source_kind` is a `SourceKind`. Its values are:
+
+- `MARKDOWN`
+- `TEXT`
+- `DIFF`
+- `JIRA`
+- `PROMPT`
+- `PDF`
+- `DOCX`
+- `HTML`
+- `XLSX`
 
 `ContextRequest(context, question, chunks=None, debug=False)`. With `chunks=None`, the value of the recipe applies.
 

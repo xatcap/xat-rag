@@ -1,0 +1,11 @@
+[rag]
+name = "sheets"
+embedder = "bge-small-en-v1.5"
+reranker = "ms-marco-minilm-l6-v2"
+
+[sources.main]
+kind = "xlsx"
+max_chunk_tokens = 120
+
+[retrieval]
+keep = 6

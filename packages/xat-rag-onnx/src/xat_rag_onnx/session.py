@@ -5,13 +5,18 @@
 # pyright: reportMissingTypeStubs=false, reportUnknownMemberType=false, reportUnknownVariableType=false
 # pyright: reportUnknownArgumentType=false
 
+import os
 from pathlib import Path
+
+os.environ["ORT_DISABLE_TELEMETRY"] = "1"  # ONNX Runtime reads this variable when it starts.
 
 import numpy as np
 import onnxruntime as ort
 from numpy.typing import NDArray
 from tokenizers import Encoding, Tokenizer
 from xat_rag_core.errors import ConfigError, StageError
+
+ort.disable_telemetry_events()  # The variable has no effect if the host process imported ONNX Runtime first.
 
 MAX_LENGTH = 512
 

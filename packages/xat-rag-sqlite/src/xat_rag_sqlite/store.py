@@ -12,6 +12,7 @@ import time
 from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
+from itertools import chain
 from pathlib import Path
 from typing import Any, cast
 
@@ -20,9 +21,9 @@ import sqlite_vec  # pyright: ignore[reportMissingTypeStubs]
 from numpy.typing import NDArray
 from xat_rag_core.errors import ConfigError, IndexMismatchError, InternalError, ServiceUnavailableError
 from xat_rag_core.ids import sha256_hex
-from xat_rag_core.lc_codec import span_from_meta, span_to_meta
 from xat_rag_core.model import Chunk, Scalar, SourceDocument, SourceKind
 from xat_rag_core.query import Equals, Filter, OneOf, Range
+from xat_rag_core.spans import span_from_meta, span_to_meta
 
 from xat_rag_sqlite.lexical import FTS5_TOKENIZE, index_text
 from xat_rag_sqlite.manifest import IndexManifest, check_manifest
@@ -265,6 +266,10 @@ class SqliteRagStore:
                     db.execute("INSERT INTO meta(key, value) VALUES ('schema_version', ?)", (_SCHEMA_VERSION,))
                 else:
                     check_manifest(IndexManifest.from_json(cast(str, row[0])), self._manifest)
+                db.execute(
+                    "CREATE TABLE IF NOT EXISTS ingest_state("
+                    "doc_id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, result TEXT NOT NULL)"
+                )
                 db.execute("COMMIT")
             except BaseException:
                 _rollback(db)
@@ -311,16 +316,17 @@ class SqliteRagStore:
         document: SourceDocument,
         chunks: Sequence[Chunk],
         embed: Callable[[tuple[Chunk, ...]], NDArray[np.float32]],
+        state: tuple[str, str] | None = None,
     ) -> UpsertPlan:
         """Plan, embed and write one document. Only one upsert or delete runs at a time on a store.
 
         Use this method, not `plan_upsert` and `apply_upsert` apart, so that no other write can
-        happen between the plan and the write.
+        happen between the plan and the write. `state` is the fingerprint and the result of this upload.
         """
         with self._ingest_lock:
             plan = self.plan_upsert(document, chunks)
             vectors = embed(plan.to_embed) if plan.to_embed else np.zeros((0, self._dims), dtype=np.float32)
-            self.apply_upsert(plan, vectors)
+            self.apply_upsert(plan, vectors, state)
             return plan
 
     def plan_upsert(self, document: SourceDocument, chunks: Sequence[Chunk]) -> UpsertPlan:
@@ -376,11 +382,15 @@ class SqliteRagStore:
             status = UpsertStatus.UPDATED
         return UpsertPlan(document, status, tuple(to_embed), tuple(reused), tuple(to_update), stale, document_changed)
 
-    def apply_upsert(self, plan: UpsertPlan, vectors: NDArray[np.float32]) -> None:
+    def apply_upsert(
+        self, plan: UpsertPlan, vectors: NDArray[np.float32], state: tuple[str, str] | None = None
+    ) -> None:
         """Write a planned upsert in one transaction. `vectors` has one row for each chunk in `to_embed`."""
         if vectors.shape[0] != len(plan.to_embed):
             raise InternalError("The number of vectors does not match the number of chunks to embed.")
         if plan.status is UpsertStatus.UNCHANGED:
+            with self._write_lock:
+                self._write_state(self._writer, plan.document.doc_id, state)
             return
         blobs = [_vector_blob(vectors[i], self._dims) for i in range(len(plan.to_embed))]
         document = plan.document
@@ -410,10 +420,20 @@ class SqliteRagStore:
                     self._insert_chunk(db, chunk, blob)
                 for chunk in plan.to_update:
                     self._update_chunk(db, chunk)
+                self._write_state(db, plan.document.doc_id, state)
                 db.execute("COMMIT")
             except BaseException:
                 _rollback(db)
                 raise
+
+    @staticmethod
+    def _write_state(db: sqlite3.Connection, doc_id: str, state: tuple[str, str] | None) -> None:
+        if state is not None:
+            db.execute(
+                "INSERT INTO ingest_state(doc_id, fingerprint, result) VALUES (?, ?, ?) "
+                "ON CONFLICT(doc_id) DO UPDATE SET fingerprint = excluded.fingerprint, result = excluded.result",
+                (doc_id, *state),
+            )
 
     def _insert_chunk(self, db: sqlite3.Connection, chunk: Chunk, blob: bytes) -> None:
         cursor = db.execute(
@@ -486,6 +506,14 @@ class SqliteRagStore:
         db.execute("DELETE FROM chunk_fields WHERE chunk_rowid = ?", (rowid,))
         db.execute("DELETE FROM chunks WHERE id = ?", (rowid,))
 
+    def ingest_state(self, doc_id: str, fingerprint: str) -> str | None:
+        """Return the saved result of the last upload of a document, if it has this fingerprint."""
+        with self._read() as db:
+            row = db.execute(
+                "SELECT result FROM ingest_state WHERE doc_id = ? AND fingerprint = ?", (doc_id, fingerprint)
+            ).fetchone()
+        return cast(str, row[0]) if row is not None else None
+
     def delete_document(self, doc_id: str) -> bool:
         """Delete a document and all its chunks. Return `False` if the document is not in the store.
 
@@ -499,6 +527,7 @@ class SqliteRagStore:
                 for chunk_id in ids:
                     self._delete_chunk(db, chunk_id)
                 deleted = db.execute("DELETE FROM documents WHERE doc_id = ?", (doc_id,)).rowcount > 0
+                db.execute("DELETE FROM ingest_state WHERE doc_id = ?", (doc_id,))
                 db.execute("COMMIT")
             except BaseException:
                 _rollback(db)
@@ -547,12 +576,9 @@ class SqliteRagStore:
         ids = list(dict.fromkeys(chunk_ids))
         result: dict[str, Chunk] = {}
         with self._read() as db:
-            for offset in range(0, len(ids), _ID_BATCH):
-                batch = ids[offset : offset + _ID_BATCH]
-                sql = f"SELECT {_CHUNK_COLUMNS} FROM chunks c WHERE c.chunk_id IN ({','.join('?' * len(batch))})"
-                for row in db.execute(sql, batch).fetchall():
-                    chunk = _row_to_chunk(row)
-                    result[chunk.chunk_id] = chunk
+            for row in _rows_for_ids(db, f"SELECT {_CHUNK_COLUMNS} FROM chunks c WHERE c.chunk_id IN ({{}})", ids):
+                chunk = _row_to_chunk(row)
+                result[chunk.chunk_id] = chunk
         return result
 
     def vectors(self, chunk_ids: Sequence[str]) -> NDArray[np.float32]:
@@ -562,14 +588,8 @@ class SqliteRagStore:
         ids = list(dict.fromkeys(chunk_ids))
         by_id: dict[str, NDArray[np.float32]] = {}
         with self._read() as db:
-            for offset in range(0, len(ids), _ID_BATCH):
-                batch = ids[offset : offset + _ID_BATCH]
-                sql = (
-                    "SELECT c.chunk_id, v.embedding FROM chunks c JOIN chunks_vec v ON v.rowid = c.id "
-                    f"WHERE c.chunk_id IN ({','.join('?' * len(batch))})"
-                )
-                for row in db.execute(sql, batch).fetchall():
-                    by_id[cast(str, row[0])] = np.frombuffer(cast(bytes, row[1]), dtype=np.float32)
+            for row in _rows_for_ids(db, _VECTORS_BY_ID, ids):
+                by_id[cast(str, row[0])] = np.frombuffer(cast(bytes, row[1]), dtype=np.float32)
         missing = [chunk_id for chunk_id in chunk_ids if chunk_id not in by_id]
         if missing:
             raise InternalError("A vector of a chunk is not in the store.")
@@ -580,14 +600,8 @@ class SqliteRagStore:
         ids = list(dict.fromkeys(chunk_ids))
         found: dict[str, NDArray[np.float32]] = {}
         with self._read() as db:
-            for offset in range(0, len(ids), _ID_BATCH):
-                batch = ids[offset : offset + _ID_BATCH]
-                sql = (
-                    "SELECT c.chunk_id, v.embedding FROM chunks c JOIN chunks_vec v ON v.rowid = c.id "
-                    f"WHERE c.chunk_id IN ({','.join('?' * len(batch))})"
-                )
-                for row in db.execute(sql, batch).fetchall():
-                    found[cast(str, row[0])] = np.frombuffer(cast(bytes, row[1]), dtype=np.float32)
+            for row in _rows_for_ids(db, _VECTORS_BY_ID, ids):
+                found[cast(str, row[0])] = np.frombuffer(cast(bytes, row[1]), dtype=np.float32)
         return found
 
     def search_lexical(self, expression: str, k: int, filters: Filter) -> list[Chunk]:
@@ -624,12 +638,24 @@ class SqliteRagStore:
         ids = list(dict.fromkeys(doc_ids))
         result: dict[str, str] = {}
         with self._read() as db:
-            for offset in range(0, len(ids), _ID_BATCH):
-                batch = ids[offset : offset + _ID_BATCH]
-                sql = f"SELECT doc_id, version FROM documents WHERE doc_id IN ({','.join('?' * len(batch))})"
-                for row in db.execute(sql, batch).fetchall():
-                    result[cast(str, row[0])] = cast(str, row[1])
+            for row in _rows_for_ids(db, "SELECT doc_id, version FROM documents WHERE doc_id IN ({})", ids):
+                result[cast(str, row[0])] = cast(str, row[1])
         return result
+
+
+_VECTORS_BY_ID = (
+    "SELECT c.chunk_id, v.embedding FROM chunks c JOIN chunks_vec v ON v.rowid = c.id WHERE c.chunk_id IN ({})"
+)
+
+
+def _rows_for_ids(db: sqlite3.Connection, template: str, ids: Sequence[str]) -> list[Any]:
+    """Run a query for many IDs in batches. `template` has one `{}` for the placeholders."""
+    batches = (ids[start : start + _ID_BATCH] for start in range(0, len(ids), _ID_BATCH))
+
+    def rows_of(batch: Sequence[str]) -> list[Any]:
+        return db.execute(template.format(",".join("?" * len(batch))), batch).fetchall()
+
+    return list(chain.from_iterable(map(rows_of, batches)))
 
 
 def _row_to_document(document: SourceDocument, row: Sequence[Any]) -> SourceDocument:

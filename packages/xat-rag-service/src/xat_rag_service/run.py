@@ -16,9 +16,7 @@ from collections.abc import Generator
 from pathlib import Path
 from typing import IO, Any
 
-import langsmith
 import uvicorn
-from langchain_core.globals import set_debug, set_verbose
 from xat_rag import Settings, XatRag
 from xat_rag_core.errors import ConfigError, XatRagError
 
@@ -36,7 +34,7 @@ def configure_logs() -> None:
     pypdf and other libraries can log parts of a bad file, so their logs are off.
     """
     logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(levelname)s %(name)s %(message)s")
-    for name in ("pypdf", "docx", "bs4", "uvicorn.access", "httpx", "langsmith", "onnxruntime"):
+    for name in ("docling", "docling_parse", "uvicorn.access", "httpx", "onnxruntime"):
         logging.getLogger(name).setLevel(logging.CRITICAL + 1)
 
 
@@ -153,9 +151,6 @@ def _watch_input(server: uvicorn.Server) -> None:
 def run() -> int:
     """Run the service until it stops. Return the exit code."""
     configure_logs()
-    langsmith.configure(enabled=False)  # pyright: ignore[reportUnknownMemberType]
-    set_debug(False)
-    set_verbose(False)
     try:
         settings = read_settings(os.environ, release_folder())
         lock = lock_data_folder(settings.data_folder)

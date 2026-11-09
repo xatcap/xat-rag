@@ -10,7 +10,7 @@ from pathlib import Path
 
 import docx
 import pytest
-from pypdf import PdfReader, PdfWriter
+from reportlab.pdfgen.canvas import Canvas
 from xat_rag import ContextRequest, Settings, XatRag
 from xat_rag_core.errors import ConfigError, IndexMismatchError, InvalidRequestError, NotFoundError
 from xat_rag_core.model import PageSpan, RawDocument, SourceKind
@@ -105,11 +105,12 @@ def make_pdf(pages: list[str], password: str | None = None) -> bytes:
     data = out.getvalue()
     if password is None:
         return data
-    writer = PdfWriter()
-    writer.append(PdfReader(io.BytesIO(data)))
-    writer.encrypt(password, algorithm="RC4-128")
     result = io.BytesIO()
-    writer.write(result)
+    canvas = Canvas(result, encrypt=password)
+    for text in pages:
+        canvas.drawString(72, 712, text)
+        canvas.showPage()
+    canvas.save()
     return result.getvalue()
 
 
@@ -191,11 +192,11 @@ def test_pdf_pages_are_indexed_and_returned_with_a_page_anchor(rag: XatRag) -> N
     assert result.status == "created"
     assert (result.pages_total, result.pages_indexed) == (3, 2)
     assert [(page.page, page.reason) for page in result.skipped_pages] == [(2, "no_text")]
-    assert result.chunks >= 2
+    assert result.chunks == 1  # A file with no headings is one section, and pages are not split points.
     chunks = rag.retrieve(ContextRequest("ask-files", question="Which port does the orders service use?")).chunks
     top = chunks[0]
     assert (top.kind, top.source.doc_id, top.source.rag, top.source.source_kind) == (
-        "page",
+        "section",
         "files:manual.pdf",
         "files",
         "pdf",
@@ -204,11 +205,8 @@ def test_pdf_pages_are_indexed_and_returned_with_a_page_anchor(rag: XatRag) -> N
     assert top.source.title == "Manual"
     assert top.source.version == "rev-4"
     assert isinstance(top.source.span, PageSpan)
-    assert (top.source.span.page_start, top.source.span.page_end) == (1, 1)
-    cafeteria = [c for c in chunks if "Cafeteria" in c.text]
-    assert cafeteria
-    assert all(c.source.uri == "https://wiki/manual.pdf#page=3" for c in cafeteria)
-    assert all(isinstance(c.source.span, PageSpan) and c.source.span.page_start == 3 for c in cafeteria)
+    assert (top.source.span.page_start, top.source.span.page_end) == (1, 3)
+    assert "Cafeteria" in top.text
 
 
 def test_pdf_failures_are_results_and_hold_no_document_text(rag: XatRag) -> None:
@@ -508,3 +506,22 @@ def test_a_context_recipe_with_a_removed_field_stops_the_start_and_names_the_fie
     text = CONTEXT.replace("ask-files", "old").replace('name = "old"\n', 'name = "old"\nwindow = 8192\n')
     with pytest.raises(ConfigError, match=r"context\.window"):
         open_with_context(tmp_path, "old", text)
+
+
+def test_an_unchanged_upload_is_not_parsed_again(rag: XatRag, monkeypatch: pytest.MonkeyPatch) -> None:
+    document = raw("files:skip.pdf", SourceKind.PDF, make_pdf([PAGE_ONE, "", PAGE_THREE]))
+    first = rag.ingest_one(document)
+    assert first.status == "created"
+
+    def fail(*_args: object) -> None:
+        raise AssertionError("The document was parsed again.")
+
+    parser: object = getattr(rag.index("files"), "_parsers")["pdf"]  # noqa: B009
+    monkeypatch.setattr(parser, "parse", fail)
+    second = rag.ingest_one(document)
+    assert second.status == "unchanged"
+    assert (second.chunks, second.pages_total, second.pages_indexed) == (first.chunks, 3, 2)
+    assert second.skipped_pages == first.skipped_pages
+    changed = dataclasses.replace(document, version="other")
+    with pytest.raises(AssertionError, match="parsed again"):
+        rag.ingest_one(changed)

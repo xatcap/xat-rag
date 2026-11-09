@@ -1,20 +1,14 @@
-"""The parser contract: `SectionParser`, a deadline, and the LangChain `BaseBlobParser` adapter.
+"""The parser contract: `SectionParser` and a deadline.
 
 Parsers get bytes, never paths or URLs, so a parser cannot read files or the network. See ADR 0012.
 """
 
 import time
-from collections.abc import Iterator
-from typing import Protocol, override
-
-from langchain_core.document_loaders import BaseBlobParser
-from langchain_core.documents import Document
-from langchain_core.documents.base import Blob
+from typing import Protocol
 
 from xat_rag_core.errors import ParseError, ParseReason
-from xat_rag_core.ids import chunk_id, sha256_hex
-from xat_rag_core.lc_codec import span_to_meta
-from xat_rag_core.model import ParsedDocument, RawDocument, SourceDocument, SourceKind
+from xat_rag_core.ids import sha256_hex
+from xat_rag_core.model import ParsedDocument, RawDocument, SourceDocument
 from xat_rag_core.sanitize import sanitize_metadata, sanitize_text
 
 _BOM = "﻿"
@@ -28,12 +22,19 @@ class Deadline:
         self._seconds = seconds
         self._end = time.monotonic() + seconds
 
-    def restart(self) -> None:
-        """Start the time limit again.
+    @property
+    def seconds(self) -> float:
+        """The length of the time limit."""
+        return self._seconds
+
+    def restart(self, seconds: float | None = None) -> None:
+        """Start the time limit again, with a new length if `seconds` is given.
 
         Parsers call this after they get the shared parse lock, so that the time spent waiting for the
         lock does not count.
         """
+        if seconds is not None:
+            self._seconds = seconds
         self._end = time.monotonic() + self._seconds
 
     def check(self) -> None:
@@ -87,43 +88,3 @@ def source_document(raw: RawDocument, title: str | None = None) -> SourceDocumen
         content_hash=sha256_hex(raw.data),
         metadata=sanitize_metadata(raw.metadata),
     )
-
-
-class SectionBlobParser(BaseBlobParser):
-    """Exposes a `SectionParser` as a LangChain `BaseBlobParser`, for LangChain users.
-
-    Each section becomes one `Document`. The blob must hold bytes, and its metadata must hold
-    `doc_id` and `rag`. A blob with only a path is refused, because parsers never read files.
-    """
-
-    def __init__(self, parser: SectionParser, deadline_seconds: float = 60.0) -> None:
-        """Wrap a parser."""
-        self._parser = parser
-        self._deadline_seconds = deadline_seconds
-
-    @override
-    def lazy_parse(self, blob: Blob) -> Iterator[Document]:
-        if not isinstance(blob.data, bytes):
-            raise ParseError(ParseReason.INVALID, "A blob must hold bytes. Parsers do not read paths.")
-        metadata = blob.metadata
-        raw = RawDocument(
-            doc_id=str(metadata["doc_id"]),
-            rag=str(metadata["rag"]),
-            source_kind=SourceKind(self._parser.kind),
-            data=blob.data,
-            uri=str(metadata.get("uri", "")),
-            title=str(metadata.get("title", "")),
-        )
-        parsed = self._parser.parse(raw, Deadline(self._deadline_seconds))
-        for section in parsed.sections:
-            yield Document(
-                page_content=section.text,
-                id=chunk_id(raw.doc_id, section.anchor),
-                metadata={
-                    "doc_id": raw.doc_id,
-                    "anchor": section.anchor,
-                    "kind": section.kind,
-                    "header": section.header,
-                    "span": span_to_meta(section.span),
-                },
-            )

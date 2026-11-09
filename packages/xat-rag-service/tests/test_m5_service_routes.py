@@ -13,7 +13,7 @@ import docx
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from pypdf import PdfReader, PdfWriter
+from reportlab.pdfgen.canvas import Canvas
 from service_setup import LOCK, MODELS, multipart, write_setup
 from xat_rag import ContextRequest, RetrievalResult, Settings, XatRag
 from xat_rag.types import DocumentResult, OmittedItem
@@ -79,11 +79,12 @@ def make_pdf(pages: list[str], password: str | None = None) -> bytes:
     data = out.getvalue()
     if password is None:
         return data
-    writer = PdfWriter()
-    writer.append(PdfReader(io.BytesIO(data)))
-    writer.encrypt(password, algorithm="RC4-128")
     result = io.BytesIO()
-    writer.write(result)
+    canvas = Canvas(result, encrypt=password)
+    for text in pages:
+        canvas.drawString(72, 712, text)
+        canvas.showPage()
+    canvas.save()
     return result.getvalue()
 
 
@@ -222,7 +223,7 @@ def test_pdf_docx_html_and_markdown_in_one_upload(client: TestClient) -> None:
     spans = {hit["chunk_id"].split("#")[0]: hit["source"]["span"]["type"] for hit in hits}
     assert spans["mixed:manual.pdf"] == "page"
     assert spans["mixed:spec.docx"] == "block"
-    assert spans["mixed:guide.html"] == "line"
+    assert spans["mixed:guide.html"] == "block"
     assert spans["mixed:note.md"] == "line"
     billing = client.post("/v1/rags/mixed/search", json={"question": "billing TLS port 9443"}).json()
     assert billing["hits"][0]["chunk_id"].startswith("mixed:spec.docx#")

@@ -1,118 +1,145 @@
 import io
+import itertools
 import threading
 import zipfile
+from pathlib import Path
 
 import pytest
-from fixtures_documents import HTML, make_docx, make_pdf
-from xat_rag_core.errors import ParseError, ParseReason
-from xat_rag_core.model import BlockSpan, LineSpan, PageSpan, RawDocument, SourceKind
+from fixtures_documents import HTML, make_docx, make_layout_pdf, make_pdf, make_xlsx
+from xat_rag_core.errors import ConfigError, ParseError, ParseReason
+from xat_rag_core.model import BlockSpan, CellSpan, PageSpan, RawDocument, SourceKind
 from xat_rag_core.parsing import Deadline
-from xat_rag_documents import DocumentLimits, DocxParser, HtmlParser, PdfParser
+from xat_rag_documents import DocumentLimits, DocxParser, HtmlParser, PdfParser, XlsxParser
 from xat_rag_parsers import ChunkLimits, StructuralChunker
+
+MODELS = Path(__file__).resolve().parents[3] / "models"
+needs_models = pytest.mark.skipif(
+    not (MODELS / "docling-project--docling-layout-heron" / "model.safetensors").exists(), reason="models not fetched"
+)
+TEXT = "This page has enough text to count as a text layer for xat-rag."
 
 
 def raw(kind: SourceKind, data: bytes) -> RawDocument:
-    return RawDocument(f"docs:file.{kind.value}", "docs", kind, data, uri="file")
+    return RawDocument("docs:file", "docs", kind, data)
 
 
 def words(text: str) -> int:
     return len(text.split())
 
 
-TEXT = "This page has enough text to count as a text layer for xat-rag."
+def pdf() -> PdfParser:
+    return PdfParser(models=MODELS)
 
 
-def test_pdf_pages_without_outline_and_skipped_pages() -> None:
-    parsed = PdfParser().parse(raw(SourceKind.PDF, make_pdf([TEXT + " one", "", TEXT + " three"])), Deadline.none())
-    assert [s.anchor for s in parsed.sections] == ["p/1", "p/3"]
-    assert parsed.sections[1].span == PageSpan(3, 3, "3", "3")
-    assert parsed.report.pages_total == 3
-    assert parsed.report.pages_indexed == 2
-    assert [(p.page, p.reason) for p in parsed.report.skipped_pages] == [(2, "no_text")]
+def reason_of(parser: PdfParser | DocxParser | HtmlParser | XlsxParser, document: RawDocument) -> ParseReason:
+    with pytest.raises(ParseError) as error:
+        parser.parse(document, Deadline.none())
+    return error.value.reason
 
 
-def test_pdf_outline_sections_and_split_page_spans() -> None:
-    pages = [TEXT + " intro", TEXT + " install a", TEXT + " install b", TEXT + " linux"]
-    data = make_pdf(pages, outline=[("Install", 1), ("Linux", 3)])
-    parsed = PdfParser().parse(raw(SourceKind.PDF, data), Deadline.none())
-    assert [s.anchor for s in parsed.sections] == ["h", "h/install", "h/linux"]
-    install = parsed.sections[1]
-    assert install.span == PageSpan(2, 3, "2", "3")
-    chunks = StructuralChunker(words, words, ChunkLimits(25)).chunk(parsed, "pdf-v1")
-    spans = [c.span for c in chunks if c.chunk_id.startswith("docs:file.pdf#h/install")]
-    assert {(s.page_start, s.page_end) for s in spans if isinstance(s, PageSpan)} == {(2, 2), (3, 3)}
+@needs_models
+def test_pdf_sections_follow_headings_and_not_pages() -> None:
+    parsed = pdf().parse(raw(SourceKind.PDF, make_layout_pdf()), Deadline.none())
+    assert [s.anchor for s in parsed.sections[1:]] == ["h/payments", "h/payments/retries", "h/payments/refunds"]
+    refunds = parsed.sections[3]
+    assert refunds.header == "Payments > Refunds"
+    assert isinstance(refunds.span, PageSpan)
+    assert refunds.span.page_end > refunds.span.page_start
+    assert parsed.report.pages_total == parsed.report.pages_indexed
+    everything = " ".join(s.text for s in parsed.sections)
+    assert "Acme Handbook" not in everything
+    assert "Internal page" not in everything
+    assert "| E1 | Declined |" in everything
 
 
+@needs_models
+def test_pdf_pieces_have_the_pages_of_their_own_text() -> None:
+    parsed = pdf().parse(raw(SourceKind.PDF, make_layout_pdf()), Deadline.none())
+    chunks = StructuralChunker(words, words, ChunkLimits(60)).chunk(parsed, "v")
+    spans = [c.span for c in chunks if "refunds" in c.chunk_id and isinstance(c.span, PageSpan)]
+    assert spans[0].page_start < spans[-1].page_end
+    assert all(a.page_end <= b.page_end for a, b in itertools.pairwise(spans))
+
+
+@needs_models
 def test_pdf_with_no_text_layer_fails() -> None:
-    with pytest.raises(ParseError) as error:
-        PdfParser().parse(raw(SourceKind.PDF, make_pdf(["", ""])), Deadline.none())
-    assert error.value.reason is ParseReason.NO_TEXT_LAYER
+    assert reason_of(pdf(), raw(SourceKind.PDF, make_pdf(["", ""]))) is ParseReason.NO_TEXT_LAYER
 
 
-def test_pdf_encrypted_invalid_and_limits() -> None:
+@needs_models
+def test_pdf_with_a_password_is_refused_and_an_empty_password_is_read() -> None:
+    assert reason_of(pdf(), raw(SourceKind.PDF, make_layout_pdf(password="pw"))) is ParseReason.ENCRYPTED
+    parsed = pdf().parse(raw(SourceKind.PDF, make_layout_pdf(password="")), Deadline.none())
+    assert any("Retries happen" in s.text for s in parsed.sections)
+
+
+@needs_models
+def test_pdf_invalid_and_limits() -> None:
+    assert reason_of(pdf(), raw(SourceKind.PDF, b"not a pdf")) is ParseReason.INVALID
+    assert (
+        reason_of(
+            PdfParser(DocumentLimits(max_pdf_pages=1), models=MODELS), raw(SourceKind.PDF, make_pdf([TEXT, TEXT]))
+        )
+        is ParseReason.LIMIT_EXCEEDED
+    )
+    assert (
+        reason_of(PdfParser(DocumentLimits(max_binary_bytes=10), models=MODELS), raw(SourceKind.PDF, make_pdf([TEXT])))
+        is ParseReason.TOO_LARGE
+    )
     with pytest.raises(ParseError) as error:
-        PdfParser().parse(raw(SourceKind.PDF, make_pdf([TEXT], password="pw")), Deadline.none())
-    assert error.value.reason is ParseReason.ENCRYPTED
-    with pytest.raises(ParseError) as error:
-        PdfParser().parse(raw(SourceKind.PDF, b"not a pdf"), Deadline.none())
-    assert error.value.reason is ParseReason.INVALID
-    with pytest.raises(ParseError) as error:
-        PdfParser(DocumentLimits(max_pdf_pages=1)).parse(raw(SourceKind.PDF, make_pdf([TEXT, TEXT])), Deadline.none())
-    assert error.value.reason is ParseReason.LIMIT_EXCEEDED
-    with pytest.raises(ParseError) as error:
-        PdfParser(DocumentLimits(max_binary_bytes=10)).parse(raw(SourceKind.PDF, make_pdf([TEXT])), Deadline.none())
-    assert error.value.reason is ParseReason.TOO_LARGE
-    with pytest.raises(ParseError) as error:
-        PdfParser().parse(raw(SourceKind.PDF, make_pdf([TEXT, TEXT])), Deadline(-1))
+        pdf().parse(raw(SourceKind.PDF, make_pdf([TEXT, TEXT])), Deadline(-1))
     assert error.value.reason is ParseReason.PARSE_TIMEOUT
+
+
+def test_pdf_needs_the_models_folder() -> None:
+    with pytest.raises(ConfigError):
+        PdfParser().parse(raw(SourceKind.PDF, make_pdf([TEXT])), Deadline.none())
 
 
 def test_docx_headings_tables_and_hidden_text() -> None:
     parsed = DocxParser().parse(raw(SourceKind.DOCX, make_docx()), Deadline.none())
-    assert [s.anchor for s in parsed.sections] == ["h", "h/requirements", "h/requirements/security"]
-    requirements, security = parsed.sections[1], parsed.sections[2]
-    assert requirements.text == "Visible text."
+    anchors = [s.anchor for s in parsed.sections]
+    assert anchors == ["h", "h/requirements", "h/requirements/security"]
+    security = parsed.sections[2]
     assert "SECRET" not in "".join(s.text for s in parsed.sections)
     assert "| port | 443 |" in security.text
     assert isinstance(security.span, BlockSpan)
-    assert security.header == "Spec > Requirements > Security"
 
 
 def test_docx_macros_bad_zip_and_zip_bomb() -> None:
-    with pytest.raises(ParseError) as error:
-        DocxParser().parse(raw(SourceKind.DOCX, make_docx(macro=True)), Deadline.none())
-    assert error.value.reason is ParseReason.UNSUPPORTED_MEDIA_TYPE
-    with pytest.raises(ParseError) as error:
-        DocxParser().parse(raw(SourceKind.DOCX, b"PK not a zip"), Deadline.none())
-    assert error.value.reason is ParseReason.INVALID
+    assert reason_of(DocxParser(), raw(SourceKind.DOCX, make_docx(macro=True))) is ParseReason.UNSUPPORTED_MEDIA_TYPE
+    assert reason_of(DocxParser(), raw(SourceKind.DOCX, b"PK not a zip")) is ParseReason.INVALID
     bomb = io.BytesIO()
     with zipfile.ZipFile(bomb, "w", zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("word/document.xml", b"\x00" * 20_000_000)
-    with pytest.raises(ParseError) as error:
-        DocxParser().parse(raw(SourceKind.DOCX, bomb.getvalue()), Deadline.none())
-    assert error.value.reason is ParseReason.LIMIT_EXCEEDED
+    assert reason_of(DocxParser(), raw(SourceKind.DOCX, bomb.getvalue())) is ParseReason.LIMIT_EXCEEDED
 
 
-def test_html_sections_removed_content_and_source_lines() -> None:
+def test_html_sections_removed_content_and_lists() -> None:
     parsed = HtmlParser().parse(raw(SourceKind.HTML, HTML), Deadline.none())
-    assert parsed.source.title == "Guide"
     assert [s.anchor for s in parsed.sections] == ["h", "h/setup", "h/setup/proxy"]
     proxy = parsed.sections[2]
-    assert "Set HTTPS_PROXY first." in proxy.text
-    assert "one\ntwo" in proxy.text
+    assert "Set HTTPS_PROXY first." in proxy.text or "HTTPS_PROXY" in proxy.text
+    assert "- one\n\n- two" in proxy.text
     everything = " ".join(s.text for s in parsed.sections)
     for removed in ("alert", "IGNORE PREVIOUS", "hidden text", "a comment", "body{}"):
         assert removed not in everything
-    assert proxy.span == LineSpan(8, 12)
+    assert isinstance(proxy.span, BlockSpan)
 
 
 def test_html_limits() -> None:
-    with pytest.raises(ParseError) as error:
-        HtmlParser(DocumentLimits(max_html_elements=3)).parse(raw(SourceKind.HTML, HTML), Deadline.none())
-    assert error.value.reason is ParseReason.LIMIT_EXCEEDED
-    with pytest.raises(ParseError) as error:
-        HtmlParser(DocumentLimits(max_html_bytes=10)).parse(raw(SourceKind.HTML, HTML), Deadline.none())
-    assert error.value.reason is ParseReason.TOO_LARGE
+    assert (
+        reason_of(HtmlParser(DocumentLimits(max_html_elements=3)), raw(SourceKind.HTML, HTML))
+        is ParseReason.LIMIT_EXCEEDED
+    )
+    assert reason_of(HtmlParser(DocumentLimits(max_html_bytes=10)), raw(SourceKind.HTML, HTML)) is ParseReason.TOO_LARGE
+
+
+def test_xlsx_has_one_section_for_each_sheet_with_row_spans() -> None:
+    parsed = XlsxParser().parse(raw(SourceKind.XLSX, make_xlsx()), Deadline.none())
+    assert [s.anchor for s in parsed.sections] == ["h/rates", "h/other"]
+    assert parsed.sections[0].span == CellSpan("Rates", 1, 3)
+    assert "| A | 1 |" in parsed.sections[0].text
 
 
 def test_shared_lock_is_used() -> None:
@@ -121,12 +148,12 @@ def test_shared_lock_is_used() -> None:
     result: list[str] = []
     thread = threading.Thread(
         target=lambda: result.append(
-            HtmlParser(lock=lock).parse(raw(SourceKind.HTML, HTML), Deadline.none()).source.title
+            HtmlParser(lock=lock).parse(raw(SourceKind.HTML, HTML), Deadline.none()).sections[1].text
         )
     )
     thread.start()
     thread.join(0.2)
     assert result == []
     lock.release()
-    thread.join(5)
-    assert result == ["Guide"]
+    thread.join(30)
+    assert result

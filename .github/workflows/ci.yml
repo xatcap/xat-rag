@@ -44,7 +44,7 @@ jobs:
         run: uv run lint-imports
       - name: Tests (sockets blocked, except loopback where a test allows it)
         run: uv run pytest
-      - name: Dependency allowlist, denylist and licenses
+      - name: Dependency allowlist and licenses
         run: uv run python tools/check_dependencies.py
       - name: Retrieval quality gate
         run: uv run xat-rag-eval run --setup eval/fixtures/setup --golden eval/fixtures/golden.jsonl --data ${{ runner.temp }}/eval --baseline eval/baseline.json

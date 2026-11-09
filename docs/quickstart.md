@@ -39,7 +39,9 @@ The release folder has these folders next to the executable:
 |---|---|
 | `recipes/` | The default recipes. |
 | `data/` | The indexes, and the ready file of the running service. |
-| `models/` | The model files and `models.lock.json`. |
+| `models/` | The model files, the PDF layout models and `models.lock.json`. |
+
+A RAG with a `pdf` source needs the PDF layout models in `models/`. Without them, the service does not start.
 
 ## 3. Start the service
 
@@ -91,7 +93,7 @@ embedder = "bge-small-en-v1.5"
 reranker = "ms-marco-minilm-l6-v2"   # Optional. The default is "none".
 
 [sources.main]                       # The table name is free. Use one source for each kind.
-kind = "markdown"                    # markdown, text, diff, jira, prompt, pdf, docx or html
+kind = "markdown"                    # markdown, text, diff, jira, prompt, pdf, docx, html or xlsx
 max_chunk_tokens = 350               # From 32 to 2000. The chunker splits larger sections.
 
 [retrieval]
@@ -172,6 +174,8 @@ curl -s "$URL/v1/jobs/$JOB"
 
 Each document has its own result. A bad document gets the status `failed`, and the other documents continue.
 
+An upload of the same bytes gives the status `unchanged`, and the file is not parsed again. This works for Markdown, text, PDF, DOCX, HTML and Excel files.
+
 ### Ask a question
 
 ```bash
@@ -233,6 +237,10 @@ A rebuild deletes the index of the RAG and makes an empty one.
 ```bash
 curl -s -X POST "$URL/v1/rags/docs/rebuild"
 ```
+
+### Upgrade an existing index
+
+This version changes how Markdown, text, PDF, DOCX and HTML documents are split. A RAG with one of these sources returns `409 index_mismatch_error` after the upgrade. Rebuild each of these RAGs, and upload its documents again. A RAG with only diff, JIRA or prompt sources needs no rebuild.
 
 ## 6. What your app must do
 

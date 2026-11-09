@@ -16,6 +16,7 @@ _KINDS = {
     ".pdf": "pdf",
     ".docx": "docx",
     ".html": "html",
+    ".xlsx": "xlsx",
 }
 
 

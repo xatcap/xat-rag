@@ -9,9 +9,16 @@
       "license": "MIT",
       "notes": "ONNX int8 (dynamic quantization) conversion of the upstream model.",
       "files": [
-        {"path": "model.onnx", "source": "onnx/model_quantized.onnx"},
-        {"path": "tokenizer.json"},
-        {"path": "config.json"}
+        {
+          "path": "model.onnx",
+          "source": "onnx/model_quantized.onnx"
+        },
+        {
+          "path": "tokenizer.json"
+        },
+        {
+          "path": "config.json"
+        }
       ]
     },
     {
@@ -23,9 +30,16 @@
       "license": "Apache-2.0",
       "notes": "ONNX int8 (dynamic quantization) conversion of the upstream model.",
       "files": [
-        {"path": "model.onnx", "source": "onnx/model_quantized.onnx"},
-        {"path": "tokenizer.json"},
-        {"path": "config.json"}
+        {
+          "path": "model.onnx",
+          "source": "onnx/model_quantized.onnx"
+        },
+        {
+          "path": "tokenizer.json"
+        },
+        {
+          "path": "config.json"
+        }
       ]
     },
     {
@@ -37,8 +51,47 @@
       "license": "Apache-2.0",
       "notes": "Only the tokenizer files. The tokenizer is the fixed size ruler of xat-rag.",
       "files": [
-        {"path": "tokenizer.json"},
-        {"path": "tokenizer_config.json"}
+        {
+          "path": "tokenizer.json"
+        },
+        {
+          "path": "tokenizer_config.json"
+        }
+      ]
+    },
+    {
+      "id": "docling-project--docling-layout-heron",
+      "role": "layout",
+      "repo": "docling-project/docling-layout-heron",
+      "revision": "8f39ad3c0b4c58e9c2d2c84a38465abf757272d8",
+      "license": "Apache-2.0",
+      "notes": "Page layout model of Docling.",
+      "files": [
+        {
+          "path": "model.safetensors"
+        },
+        {
+          "path": "config.json"
+        },
+        {
+          "path": "preprocessor_config.json"
+        }
+      ]
+    },
+    {
+      "id": "docling-project--docling-models",
+      "role": "table-structure",
+      "repo": "docling-project/docling-models",
+      "revision": "fc0f2d45e2218ea24bce5045f58a389aed16dc23",
+      "license": "CDLA-Permissive-2.0",
+      "notes": "TableFormer table structure model of Docling, tag v2.3.0.",
+      "files": [
+        {
+          "path": "model_artifacts/tableformer/accurate/tableformer_accurate.safetensors"
+        },
+        {
+          "path": "model_artifacts/tableformer/accurate/tm_config.json"
+        }
       ]
     }
   ]

@@ -25,6 +25,8 @@ def main() -> None:
     command.add_argument("--data", type=Path, required=True, help="An empty folder for the indexes of this run.")
     command.add_argument("--baseline", type=Path)
     command.add_argument("--write-baseline", action="store_true")
+    command.add_argument("--no-semantic-split", action="store_true", help="Measure the split on structure only.")
+    command.add_argument("--overlap", type=float, default=0.0, help="The share of a piece that overlaps the last one.")
     args = parser.parse_args()
 
     setup = cast(Path, args.setup)
@@ -44,6 +46,8 @@ def main() -> None:
                 models_folder=cast(Path, args.models),
                 lock_file=cast(Path, args.lock),
                 threads=1,
+                semantic_split=not args.no_semantic_split,
+                overlap_share=cast(float, args.overlap),
             )
         )
         cases = load_golden(cast(Path, args.golden))

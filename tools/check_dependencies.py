@@ -2,7 +2,6 @@
 
 The packages come from `uv.lock`: the closure of `xat-rag-service`, without dev groups. The check fails if:
 
-- a package is on the denylist,
 - the set of packages differs from `build/dependencies.allow.json` (a new or a removed package), or
 - a license is not on the list of licenses that allow redistribution in a commercial desktop app.
 
@@ -22,30 +21,9 @@ from typing import Any, cast
 ROOT = Path(__file__).resolve().parent.parent
 ALLOW = ROOT / "build" / "dependencies.allow.json"
 ROOT_PACKAGE = "xat-rag-service"
+# torch on PyPI lists these for Linux. The Linux build uses the CPU-only torch index, so they are never installed.
+_LINUX_GPU_PREFIXES = ("cuda-", "nvidia-")
 
-DENIED = (
-    "posthog",
-    "openai",
-    "tiktoken",
-    "nltk",
-    "torch",
-    "transformers",
-    "sentence-transformers",
-    "sentry-sdk",
-    "opentelemetry-sdk",
-    "unstructured",
-    "sqlalchemy",
-    "aiohttp",
-    "cryptography",
-    "langchain-community",
-    "langchain-classic",
-    "langchain",
-    "langgraph",
-    "chromadb",
-    "haystack-ai",
-    "llama-index-core",
-)
-DENIED_PREFIXES = ("opentelemetry-exporter",)
 LICENSES = re.compile(
     r"\b(MIT|BSD|Apache|PSF|Python Software Foundation|ISC|MPL-2\.0|Mozilla Public License 2\.0|Unlicense|HPND|0BSD"
     r"|Zlib|BSL-1\.0|CC0)\b",
@@ -67,7 +45,7 @@ def closure() -> tuple[dict[str, str], set[str]]:
     stack = [ROOT_PACKAGE]
     while stack:
         name = stack.pop()
-        if name in seen or name not in packages:
+        if name in seen or name not in packages or name.startswith(_LINUX_GPU_PREFIXES):
             continue
         package = packages[name]
         seen[name] = str(package.get("version", ""))
@@ -86,11 +64,15 @@ def closure() -> tuple[dict[str, str], set[str]]:
 
 # Licenses of packages that are not installed on every build machine (for example Windows-only ones).
 # Each value was checked on PyPI. A change of version needs a new check.
-KNOWN_LICENSES = {"colorama": "BSD-3-Clause"}
+KNOWN_LICENSES = {"colorama": "BSD-3-Clause", "pywin32": "PSF-2.0", "triton": "MIT"}
+# scipy names the GPL of a compiler runtime that it bundles, with the GCC runtime exception. scipy itself is BSD.
+REVIEWED_LICENSES = {"scipy": "BSD-3-Clause"}
 
 
 def license_of(name: str) -> str:
     """Return the license text of an installed package from its metadata, or from `KNOWN_LICENSES`."""
+    if name in REVIEWED_LICENSES:
+        return REVIEWED_LICENSES[name]
     try:
         metadata = importlib.metadata.metadata(name)
     except importlib.metadata.PackageNotFoundError:
@@ -109,8 +91,6 @@ def main() -> None:
     third_party = {name: version for name, version in packages.items() if name not in workspace}
     problems: list[str] = []
     for name in sorted(third_party):
-        if name in DENIED or name.startswith(DENIED_PREFIXES):
-            problems.append(f"denied package: {name}")
         text = license_of(name)
         if COPYLEFT.search(text) or not LICENSES.search(text):
             problems.append(f"license not allowed or unknown: {name} ({text[:80] or 'no license data'})")

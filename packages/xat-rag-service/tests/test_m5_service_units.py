@@ -813,7 +813,7 @@ def test_logs_of_libraries_that_can_hold_content_are_off() -> None:
     from xat_rag_service.run import configure_logs  # noqa: PLC0415
 
     configure_logs()
-    for name in ("pypdf", "docx", "bs4", "uvicorn.access", "httpx", "langsmith", "onnxruntime"):
+    for name in ("docling", "docling_parse", "uvicorn.access", "httpx", "onnxruntime"):
         assert not logging.getLogger(name).isEnabledFor(logging.CRITICAL)
 
 

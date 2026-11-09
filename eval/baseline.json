@@ -28,6 +28,62 @@
       },
       "source_coverage": 1.0
     },
+    "docx": {
+      "cases": 30,
+      "final_mrr": 1.0,
+      "final_recall": {
+        "10": 1.0,
+        "3": 1.0,
+        "5": 1.0
+      },
+      "mrr": {
+        "dense": 1.0,
+        "fused": 0.9833,
+        "lexical": 0.9778,
+        "reranked": 1.0
+      },
+      "ndcg": {
+        "dense": 1.0,
+        "fused": 0.9877,
+        "lexical": 0.9833,
+        "reranked": 1.0
+      },
+      "recall": {
+        "dense": 1.0,
+        "fused": 1.0,
+        "lexical": 1.0,
+        "reranked": 1.0
+      },
+      "source_coverage": 1.0
+    },
+    "html": {
+      "cases": 30,
+      "final_mrr": 1.0,
+      "final_recall": {
+        "10": 1.0,
+        "3": 1.0,
+        "5": 1.0
+      },
+      "mrr": {
+        "dense": 1.0,
+        "fused": 0.9833,
+        "lexical": 0.9778,
+        "reranked": 1.0
+      },
+      "ndcg": {
+        "dense": 1.0,
+        "fused": 0.9877,
+        "lexical": 0.9833,
+        "reranked": 1.0
+      },
+      "recall": {
+        "dense": 1.0,
+        "fused": 1.0,
+        "lexical": 1.0,
+        "reranked": 1.0
+      },
+      "source_coverage": 1.0
+    },
     "jira": {
       "cases": 5,
       "final_mrr": 0.8,
@@ -74,6 +130,62 @@
         "dense": 1.0,
         "fused": 1.0,
         "lexical": 1.0,
+        "reranked": 1.0
+      },
+      "recall": {
+        "dense": 1.0,
+        "fused": 1.0,
+        "lexical": 1.0,
+        "reranked": 1.0
+      },
+      "source_coverage": 1.0
+    },
+    "pdf": {
+      "cases": 30,
+      "final_mrr": 1.0,
+      "final_recall": {
+        "10": 1.0,
+        "3": 1.0,
+        "5": 1.0
+      },
+      "mrr": {
+        "dense": 0.9833,
+        "fused": 1.0,
+        "lexical": 0.9611,
+        "reranked": 1.0
+      },
+      "ndcg": {
+        "dense": 0.9877,
+        "fused": 1.0,
+        "lexical": 0.971,
+        "reranked": 1.0
+      },
+      "recall": {
+        "dense": 1.0,
+        "fused": 1.0,
+        "lexical": 1.0,
+        "reranked": 1.0
+      },
+      "source_coverage": 1.0
+    },
+    "xlsx": {
+      "cases": 30,
+      "final_mrr": 1.0,
+      "final_recall": {
+        "10": 1.0,
+        "3": 1.0,
+        "5": 1.0
+      },
+      "mrr": {
+        "dense": 0.9833,
+        "fused": 1.0,
+        "lexical": 0.975,
+        "reranked": 1.0
+      },
+      "ndcg": {
+        "dense": 0.9877,
+        "fused": 1.0,
+        "lexical": 0.981,
         "reranked": 1.0
       },
       "recall": {

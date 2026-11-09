@@ -4,11 +4,13 @@ Each case names the RAG whose stages it measures. Stage metrics use the candidat
 only, because ranks and RRF scores are per RAG. The `reranked` stage is the order after rerank,
 duplicate removal and MMR. The `final` metrics measure the merged list of all RAGs of the context.
 A case scores either chunks or documents: for documents, each ranked list is turned into a list
-of document IDs, first place first.
+of document IDs, first place first. A case can also score an answer text. A chunk then counts as the
+answer if it contains the text. This keeps a case valid when the split rules change the chunk IDs.
 """
 
 import itertools
 import json
+import re
 import statistics
 import time
 from collections import defaultdict
@@ -34,17 +36,18 @@ GATED_NS = (5, 10)
 
 
 class Relevant(BaseModel):
-    """One relevant item: a chunk ID or a document ID (exactly one), with a grade from 1 to 3."""
+    """One relevant item: a chunk ID, a document ID or an answer text (exactly one), with a grade from 1 to 3."""
 
     model_config = ConfigDict(extra="forbid")
     chunk_id: str | None = None
     doc_id: str | None = None
+    text: str | None = Field(default=None, min_length=1)
     grade: int = Field(default=1, ge=1, le=3)
 
     @model_validator(mode="after")
     def _one_id(self) -> "Relevant":
-        if (self.chunk_id is None) == (self.doc_id is None):
-            raise ValueError("Give exactly one of chunk_id and doc_id.")
+        if sum(item is not None for item in (self.chunk_id, self.doc_id, self.text)) != 1:
+            raise ValueError("Give exactly one of chunk_id, doc_id and text.")
         return self
 
 
@@ -61,9 +64,9 @@ class Case(BaseModel):
 
     @model_validator(mode="after")
     def _same_level(self) -> "Case":
-        levels = {item.doc_id is not None for item in self.relevant}
+        levels = {(item.doc_id is not None, item.text is not None) for item in self.relevant}
         if len(levels) > 1:
-            raise ValueError("A case scores chunks or documents, not both.")
+            raise ValueError("A case scores chunks, documents or answer texts, and only one of them.")
         if not self.question.strip():
             raise ValueError("A case needs a question.")
         return self
@@ -75,7 +78,11 @@ class Case(BaseModel):
 
     def relevant_ids(self) -> dict[str, int]:
         """Return the relevant IDs with their grades."""
-        return {(item.doc_id or item.chunk_id or ""): item.grade for item in self.relevant}
+        return {(item.doc_id or item.chunk_id or item.text or ""): item.grade for item in self.relevant}
+
+    def answers(self) -> tuple[str, ...]:
+        """Return the answer texts of the case. The tuple is empty if the case scores IDs."""
+        return tuple(item.text for item in self.relevant if item.text is not None)
 
 
 def load_golden(path: Path) -> list[Case]:
@@ -116,8 +123,22 @@ class Report:
     timing_ms: dict[str, float]
 
 
-def _ids(candidates: Sequence[Candidate], by_document: bool) -> list[str]:
-    ids = [c.chunk.doc_id if by_document else c.chunk_id for c in candidates]
+def normalize_text(text: str) -> str:
+    """Return `text` in lower case, without table marks and with one space between words."""
+    return " ".join(re.sub(r"[|\s]+", " ", text).split()).casefold()
+
+
+def _answer_key(text: str, answers: Sequence[str]) -> str | None:
+    found = normalize_text(text)
+    return next((answer for answer in answers if normalize_text(answer) in found), None)
+
+
+def _ids(candidates: Sequence[Candidate], case: "Case") -> list[str]:
+    answers = case.answers()
+    if answers:
+        ids = [_answer_key(c.chunk.text, answers) or c.chunk_id for c in candidates]
+    else:
+        ids = [c.chunk.doc_id if case.by_document else c.chunk_id for c in candidates]
     return list(dict.fromkeys(ids))
 
 
@@ -140,8 +161,12 @@ def stage_order(candidates: Sequence[Candidate], stage: str) -> list[Candidate]:
     return list(candidates)
 
 
-def _final_ids(chunks: Sequence[RetrievedChunk], by_document: bool) -> list[str]:
-    ids = [chunk.source.doc_id if by_document else chunk.chunk_id for chunk in chunks]
+def _final_ids(chunks: Sequence[RetrievedChunk], case: "Case") -> list[str]:
+    answers = case.answers()
+    if answers:
+        ids = [_answer_key(chunk.text, answers) or chunk.chunk_id for chunk in chunks]
+    else:
+        ids = [chunk.source.doc_id if case.by_document else chunk.chunk_id for chunk in chunks]
     return list(dict.fromkeys(ids))
 
 
@@ -168,7 +193,7 @@ def run(rag: XatRag, cases: Sequence[Case]) -> Report:
         candidates = list(rag.search(case.rag, query, context=case.context).candidates)
         times["retrieve"].append((time.perf_counter() - start) * 1000)
         for stage in STAGES:
-            order = _ids(stage_order(candidates, stage), case.by_document)
+            order = _ids(stage_order(candidates, stage), case)
             sums[case.kind][f"recall_{stage}"].append(recall_at(order, relevant, K))
             sums[case.kind][f"ndcg_{stage}"].append(ndcg_at(order, relevant, K))
             sums[case.kind][f"mrr_{stage}"].append(reciprocal_rank(order, relevant))
@@ -179,10 +204,8 @@ def run(rag: XatRag, cases: Sequence[Case]) -> Report:
         result = rag.retrieve(request)
         times["retrieve_context"].append((time.perf_counter() - start) * 1000)
         for n in FINAL_NS:  # Cut to N chunks first, so that N counts chunks for document-level cases too.
-            finals[case.kind][f"recall_{n}"].append(
-                recall_at(_final_ids(result.chunks[:n], case.by_document), relevant, n)
-            )
-        finals[case.kind]["mrr"].append(reciprocal_rank(_final_ids(result.chunks, case.by_document), relevant))
+            finals[case.kind][f"recall_{n}"].append(recall_at(_final_ids(result.chunks[:n], case), relevant, n))
+        finals[case.kind]["mrr"].append(reciprocal_rank(_final_ids(result.chunks, case), relevant))
         finals[case.kind]["coverage"].append(float(any(chunk.source.rag == case.rag for chunk in result.chunks)))
         if not _invariants_hold(result.chunks, limit):
             violations.append(case.id)

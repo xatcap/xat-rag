@@ -32,10 +32,21 @@ dev = [
     "xat-rag-service",
     "xat-rag-eval",
     "httpx>=0.27",
+    "httpx2>=2.16",
     "pyinstaller>=6.11",
+    "reportlab>=4.2",
+    "python-docx>=1.2",
+    "openpyxl>=3.1.5",
 ]
 
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
 [tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+torchvision = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
 xat-rag-offline = { workspace = true }
 xat-rag-core = { workspace = true }
 xat-rag-sqlite = { workspace = true }
@@ -80,12 +91,12 @@ root_packages = ["xat_rag_offline", "xat_rag_core", "xat_rag_sqlite", "xat_rag_p
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
-name = "xat_rag_offline imports nothing from the workspace or LangChain"
+name = "xat_rag_offline imports nothing from the workspace"
 type = "forbidden"
 source_modules = ["xat_rag_offline"]
 forbidden_modules = [
     "xat_rag_core", "xat_rag_sqlite", "xat_rag_parsers", "xat_rag_documents", "xat_rag_onnx",
-    "xat_rag_tokenizers", "xat_rag", "xat_rag_service", "xat_rag_eval", "langchain_core", "langsmith",
+    "xat_rag_tokenizers", "xat_rag", "xat_rag_service", "xat_rag_eval",
 ]
 
 [[tool.importlinter.contracts]]
@@ -95,15 +106,8 @@ source_modules = ["xat_rag_service.paths"]
 forbidden_modules = [
     "xat_rag_offline", "xat_rag_core", "xat_rag_sqlite", "xat_rag_parsers", "xat_rag_documents", "xat_rag_onnx",
     "xat_rag_tokenizers", "xat_rag", "xat_rag_eval", "xat_rag_service.settings", "xat_rag_service.run",
-    "langchain_core", "langsmith", "uvicorn", "fastapi",
+    "uvicorn", "fastapi",
 ]
-
-[[tool.importlinter.contracts]]
-name = "No banned LangChain packages or tiktoken"
-type = "forbidden"
-source_modules = ["xat_rag_offline", "xat_rag_core", "xat_rag_sqlite", "xat_rag_parsers", "xat_rag_documents", "xat_rag_onnx", "xat_rag_tokenizers", "xat_rag", "xat_rag_service", "xat_rag_eval"]
-forbidden_modules = ["langchain_community", "langchain_classic", "langchain", "tiktoken"]
-allow_indirect_imports = true
 
 [[tool.importlinter.contracts]]
 name = "Core depends on no other workspace package"

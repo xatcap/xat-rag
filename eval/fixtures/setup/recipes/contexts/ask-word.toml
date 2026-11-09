@@ -1,0 +1,6 @@
+[context]
+name = "ask-word"
+min_score = -5
+
+[[context.sources]]
+rag = "word"

@@ -1,9 +1,10 @@
 """The entry point of the xat-rag service.
 
-`harden_process()` runs first, before any other xat-rag or LangChain import (ADR 0011). This module
+`harden_process()` runs first, before any other xat-rag import (ADR 0011). This module
 imports only the standard library, `xat_rag_offline` and `xat_rag_service.paths` at the top.
 """
 
+import multiprocessing
 import os
 import sys
 
@@ -34,4 +35,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support()  # A library can start a helper process in the frozen service.
     main()

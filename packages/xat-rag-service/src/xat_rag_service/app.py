@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from xat_rag import ContextRequest, XatRag
+from xat_rag.index import stuck_after_seconds
 from xat_rag_core.errors import (
     ErrorType,
     InvalidRequestError,
@@ -27,7 +28,6 @@ from xat_rag_core.errors import (
 from xat_rag_core.query import MAX_QUESTION_CHARS, RetrievalQuery
 from xat_rag_core.query import build_query as make_query
 from xat_rag_core.ranking import MAX_CHUNKS
-from xat_rag_core.tracing import untraced
 
 from xat_rag_service.jobs import Job, JobManager
 from xat_rag_service.serialize import chunk_json, document_result_json, query_json, result_json
@@ -87,13 +87,13 @@ class Limiter:
         self._lock = threading.Lock()
 
     async def run[R](self, function: Callable[..., R], *args: Any) -> R:
-        """Run `function` with tracing off in a worker thread. Raise `OverloadedError` if the queue is full."""
+        """Run `function` in a worker thread. Raise `OverloadedError` if the queue is full."""
         with self._lock:
             if self._active >= self._limit:
                 raise OverloadedError("Too many requests are waiting. Try again soon.", retry_after_seconds=1)
             self._active += 1
         try:
-            future = self._executor.submit(untraced, function, *args)
+            future = self._executor.submit(function, *args)
             return await asyncio.wrap_future(future)
         finally:
             with self._lock:
@@ -163,7 +163,7 @@ def create_app(rag: XatRag, queue_limit: int, version: str) -> FastAPI:  # noqa:
     app = FastAPI(title="xat-rag", version=version, docs_url=None, redoc_url=None)
     limiter = Limiter(queue_limit)
     # Embedding and storing come after the parse, so a stuck document is one that takes far longer.
-    stuck_after = rag.settings.parse_deadline_seconds * 2 + 300
+    stuck_after = stuck_after_seconds(rag.settings.parse_deadline_seconds)
     jobs = JobManager(rag.ingest_one, rag.checkpoint, stuck_after_seconds=stuck_after)
     app.state.limiter = limiter
     app.state.jobs = jobs

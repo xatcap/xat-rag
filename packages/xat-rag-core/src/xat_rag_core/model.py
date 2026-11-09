@@ -23,6 +23,7 @@ class SourceKind(StrEnum):
     PDF = "pdf"
     DOCX = "docx"
     HTML = "html"
+    XLSX = "xlsx"
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,7 +52,16 @@ class BlockSpan:
     block_end: int
 
 
-type Span = LineSpan | PageSpan | BlockSpan
+@dataclass(frozen=True, slots=True)
+class CellSpan:
+    """Rows of one sheet of an Excel file. Rows are 1-based."""
+
+    sheet: str
+    row_start: int
+    row_end: int
+
+
+type Span = LineSpan | PageSpan | BlockSpan | CellSpan
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,6 +142,28 @@ def _no_units() -> tuple[tuple[int, int], ...]:
     return ()
 
 
+class BlockKind(StrEnum):
+    """The kind of a structural block of a document."""
+
+    PARAGRAPH = "paragraph"
+    LIST_ITEM = "list_item"
+    TABLE = "table"
+    CODE = "code"
+
+
+@dataclass(frozen=True, slots=True)
+class TextBlock:
+    """A block of the text of a section. `start` and `end` are character offsets in `Section.text`."""
+
+    kind: BlockKind
+    start: int
+    end: int
+
+
+def _no_blocks() -> tuple[TextBlock, ...]:
+    return ()
+
+
 def _no_labels() -> Mapping[int, str]:
     return {}
 
@@ -142,6 +174,7 @@ class Section:
 
     `units` maps character offsets in `text` to page or block numbers, so that a piece of a
     split section gets its own span. For a `LineSpan`, lines are counted from the text.
+    `blocks` is empty for kinds that have no block structure. The chunker then uses the plain split.
     """
 
     anchor: str
@@ -154,11 +187,12 @@ class Section:
     units: tuple[tuple[int, int], ...] = field(default_factory=_no_units)
     unit_labels: Mapping[int, str] = field(default_factory=_no_labels)
     metadata: Mapping[str, Scalar] = field(default_factory=_empty_metadata)
+    blocks: tuple[TextBlock, ...] = field(default_factory=_no_blocks)
 
 
 @dataclass(frozen=True, slots=True)
 class SkippedPage:
-    """A PDF page that was not indexed, and the reason (`no_text`, `extract_error` or `page_text_limit`)."""
+    """A PDF page that was not indexed, and the reason (`no_text` or `page_text_limit`)."""
 
     page: int
     label: str | None

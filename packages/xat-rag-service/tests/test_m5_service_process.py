@@ -145,7 +145,7 @@ def test_a_ready_file_that_cannot_be_written_stops_the_service_with_exit_code_2(
 def test_the_entry_point_imports_no_library_before_the_hardening() -> None:
     code = (
         "import sys, xat_rag_service.main\n"
-        "names = ('langchain_core', 'langsmith', 'uvicorn', 'xat_rag', 'xat_rag_core')\n"
+        "names = ('uvicorn', 'xat_rag', 'xat_rag_core')\n"
         "print([name for name in names if name in sys.modules])"
     )
     result = subprocess.run(

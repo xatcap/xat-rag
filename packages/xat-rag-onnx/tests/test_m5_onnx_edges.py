@@ -2,23 +2,23 @@
 
 import json
 import os
+from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from typing import cast
 
 import numpy as np
 import pytest
-from langchain_core.documents import Document
 from numpy.typing import NDArray
-from xat_rag_core import lc_codec
 from xat_rag_core.errors import ConfigError, StageError
 from xat_rag_core.ids import chunk_content_hash
-from xat_rag_core.model import Chunk, LineSpan, SourceKind
+from xat_rag_core.model import Candidate, Chunk, LineSpan, SourceKind
 from xat_rag_onnx import (
     ModelFile,
     ModelLock,
-    OnnxCrossEncoderCompressor,
     OnnxEmbeddings,
     OnnxModel,
+    OnnxReranker,
     load_lock,
     verify_model,
 )
@@ -207,7 +207,7 @@ def test_embedding_no_texts_gives_an_empty_matrix(embedder: OnnxEmbeddings) -> N
     result = embedder.embed_documents_np([])
     assert result.shape == (0, 384)
     assert result.dtype == np.float32
-    assert embedder.embed_documents([]) == []
+    assert embedder.embed_documents_np([]).shape == (0, 384)
 
 
 @needs_models
@@ -252,7 +252,7 @@ def test_a_long_query_is_cut_and_not_refused(bge: OnnxModel, embedder: OnnxEmbed
     exact = embedder.embed_query_np("word " * room)
     assert exact.shape == (384,)
     assert np.isclose(np.linalg.norm(exact), 1.0, atol=1e-5)
-    assert len(embedder.embed_query("{}();" * 2000)) == 384
+    assert len(embedder.embed_query_np("{}();" * 2000)) == 384
 
 
 @needs_models
@@ -300,17 +300,10 @@ def test_embedder_is_safe_for_use_from_several_threads(embedder: OnnxEmbeddings)
     assert np.array_equal(np.stack(parts), expected)
 
 
-@needs_models
-def test_list_api_matches_the_numpy_api(embedder: OnnxEmbeddings) -> None:
-    docs = embedder.embed_documents(["alpha", "beta"])
-    assert np.allclose(np.array(docs, dtype=np.float32), embedder.embed_documents_np(["alpha", "beta"]))
-    assert all(isinstance(value, float) for value in docs[0])
-
-
 # The reranker.
 
 
-def _document(chunk_id: str, text: str, header: str = "h") -> Document:
+def _document(chunk_id: str, text: str, header: str = "h") -> Candidate:
     chunk = Chunk(
         chunk_id,
         "d",
@@ -323,17 +316,17 @@ def _document(chunk_id: str, text: str, header: str = "h") -> Document:
         chunk_content_hash(header, text),
         "v",
     )
-    return lc_codec.chunk_to_document(chunk)
+    return Candidate(chunk)
 
 
-def _ids(documents: list[Document] | tuple[Document, ...]) -> list[str]:
-    return [lc_codec.chunk_id_of(d) for d in documents]
+def _ids(documents: Sequence[Candidate]) -> list[str]:
+    return [d.chunk_id for d in documents]
 
 
 @needs_models
 def test_rerank_of_no_documents_and_no_passages(minilm: OnnxModel) -> None:
-    reranker = OnnxCrossEncoderCompressor(model=minilm, model_id="minilm")
-    assert list(reranker.compress_documents([], "query")) == []
+    reranker = OnnxReranker(model=minilm, model_id="minilm")
+    assert list(reranker.rerank([], "query")) == []
     scores, truncated = reranker.score("query", [])
     assert scores.shape == (0,)
     assert truncated == []
@@ -341,24 +334,24 @@ def test_rerank_of_no_documents_and_no_passages(minilm: OnnxModel) -> None:
 
 @needs_models
 def test_rerank_breaks_ties_by_chunk_id(minilm: OnnxModel) -> None:
-    reranker = OnnxCrossEncoderCompressor(model=minilm, model_id="minilm", top_n=10)
+    reranker = OnnxReranker(model=minilm, model_id="minilm", top_n=10)
     documents = [_document(chunk_id, "The orders service uses port 8080.") for chunk_id in ("c", "a", "b")]
-    result = list(reranker.compress_documents(documents, "which port"))
+    result = list(reranker.rerank(documents, "which port"))
     assert _ids(result) == ["a", "b", "c"]
-    assert len({lc_codec.document_to_candidate(d).scores.rerank_score for d in result}) == 1
+    assert len({d.scores.rerank_score for d in result}) == 1
 
 
 @needs_models
 def test_rerank_does_not_depend_on_the_input_order(minilm: OnnxModel) -> None:
-    reranker = OnnxCrossEncoderCompressor(model=minilm, model_id="minilm", top_n=10)
+    reranker = OnnxReranker(model=minilm, model_id="minilm", top_n=10)
     documents = [
         _document("a", "The cafeteria serves pasta on Fridays."),
         _document("b", "Port 8080 is the port of the orders service."),
         _document("c", "Restart the service with systemctl."),
         _document("d", "The weather is nice."),
     ]
-    forward = _ids(list(reranker.compress_documents(documents, "which port does orders use")))
-    backward = _ids(list(reranker.compress_documents(documents[::-1], "which port does orders use")))
+    forward = _ids(list(reranker.rerank(documents, "which port does orders use")))
+    backward = _ids(list(reranker.rerank(documents[::-1], "which port does orders use")))
     assert forward == backward
     assert forward[0] == "b"
 
@@ -366,32 +359,29 @@ def test_rerank_does_not_depend_on_the_input_order(minilm: OnnxModel) -> None:
 @needs_models
 def test_rerank_top_n_larger_than_the_input_and_batches(minilm: OnnxModel) -> None:
     documents = [_document(f"d{i:02d}", f"Passage number {i} about the orders service.") for i in range(7)]
-    small_batches = OnnxCrossEncoderCompressor(model=minilm, model_id="minilm", top_n=50, batch_size=2)
-    large_batches = OnnxCrossEncoderCompressor(model=minilm, model_id="minilm", top_n=50, batch_size=32)
-    one = list(small_batches.compress_documents(documents, "orders service"))
-    two = list(large_batches.compress_documents(documents, "orders service"))
+    small_batches = OnnxReranker(model=minilm, model_id="minilm", top_n=50, batch_size=2)
+    large_batches = OnnxReranker(model=minilm, model_id="minilm", top_n=50, batch_size=32)
+    one = list(small_batches.rerank(documents, "orders service"))
+    two = list(large_batches.rerank(documents, "orders service"))
     assert len(one) == 7
     assert sorted(_ids(one)) == sorted(_ids(two)) == [f"d{i:02d}" for i in range(7)]
     # The int8 model gives scores that differ a little between batch sizes, so only near ties can change order.
-    first = {lc_codec.chunk_id_of(d): lc_codec.document_to_candidate(d).scores.rerank_score or 0.0 for d in one}
-    second = {lc_codec.chunk_id_of(d): lc_codec.document_to_candidate(d).scores.rerank_score or 0.0 for d in two}
+    first = {d.chunk_id: d.scores.rerank_score or 0.0 for d in one}
+    second = {d.chunk_id: d.scores.rerank_score or 0.0 for d in two}
     assert all(abs(first[key] - second[key]) < 0.5 for key in first)
 
 
 @needs_models
 def test_rerank_marks_only_the_cut_passage(minilm: OnnxModel) -> None:
-    reranker = OnnxCrossEncoderCompressor(model=minilm, model_id="minilm", top_n=10)
+    reranker = OnnxReranker(model=minilm, model_id="minilm", top_n=10)
     documents = [_document("long", "word " * 700), _document("short", "A short passage.")]
-    flags = {
-        lc_codec.chunk_id_of(d): lc_codec.document_to_candidate(d).scores.rerank_truncated
-        for d in reranker.compress_documents(documents, "a query")
-    }
+    flags = {d.chunk_id: d.scores.rerank_truncated for d in reranker.rerank(documents, "a query")}
     assert flags == {"long": True, "short": False}
 
 
 @needs_models
 def test_rerank_query_is_cut_to_256_tokens_and_not_refused(minilm: OnnxModel) -> None:
-    reranker = OnnxCrossEncoderCompressor(model=minilm, model_id="minilm")
+    reranker = OnnxReranker(model=minilm, model_id="minilm")
     assert minilm.count_plain("word " * 256) == 256
     exact, _ = reranker.score("word " * 256, ["a passage"])
     longer, _ = reranker.score("word " * 5000, ["a passage"])
@@ -401,16 +391,14 @@ def test_rerank_query_is_cut_to_256_tokens_and_not_refused(minilm: OnnxModel) ->
 
 @needs_models
 def test_rerank_header_is_part_of_the_scored_text(minilm: OnnxModel) -> None:
-    reranker = OnnxCrossEncoderCompressor(model=minilm, model_id="minilm", top_n=2)
+    reranker = OnnxReranker(model=minilm, model_id="minilm", top_n=2)
     documents = [
         _document("a", "See the table.", header="Orders service port"),
         _document("b", "See the table.", header="Cafeteria menu"),
     ]
-    assert _ids(list(reranker.compress_documents(documents, "orders service port"))) == ["a", "b"]
+    assert _ids(list(reranker.rerank(documents, "orders service port"))) == ["a", "b"]
 
 
 def test_reranker_settings_are_validated(tmp_path: Path) -> None:
-    from pydantic import ValidationError  # noqa: PLC0415
-
-    with pytest.raises(ValidationError):
-        OnnxCrossEncoderCompressor.model_validate({"model": object(), "model_id": "m", "top_n": 0})
+    with pytest.raises(ValueError, match="top_n"):
+        OnnxReranker(model=cast(OnnxModel, object()), model_id="m", top_n=0)

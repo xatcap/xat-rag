@@ -1,32 +1,33 @@
-"""`OnnxCrossEncoderCompressor`: the reranker of xat-rag, as a LangChain `BaseDocumentCompressor`."""
+"""`OnnxReranker`: the cross-encoder reranker of xat-rag."""
 
 from collections.abc import Sequence
-from typing import override
+from dataclasses import dataclass, replace
 
 import numpy as np
-from langchain_core.callbacks import Callbacks
-from langchain_core.documents import BaseDocumentCompressor, Document
 from numpy.typing import NDArray
-from pydantic import ConfigDict, Field
 from tokenizers import Encoding
-from xat_rag_core import lc_codec
+from xat_rag_core.model import Candidate
 
 from xat_rag_onnx.session import MAX_LENGTH, OnnxModel
 
 
-class OnnxCrossEncoderCompressor(BaseDocumentCompressor):
+@dataclass(frozen=True, slots=True)
+class OnnxReranker:
     """Scores (query, passage) pairs with a cross-encoder, and keeps the best `top_n`.
 
     A pair longer than the model input keeps the query and cuts the passage at the end. The
-    document then has `rerank_truncated` in its metadata. Ties are broken by chunk ID.
+    candidate then has `rerank_truncated` in its scores. Ties are broken by chunk ID.
     """
-
-    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     model: OnnxModel
     model_id: str
-    top_n: int = Field(default=8, ge=1, le=1000)
-    batch_size: int = Field(default=32, ge=1, le=512)
+    top_n: int = 8
+    batch_size: int = 32
+
+    def __post_init__(self) -> None:
+        """Check the settings."""
+        if not 1 <= self.top_n <= 1000 or not 1 <= self.batch_size <= 512:
+            raise ValueError("top_n must be from 1 to 1000, and batch_size from 1 to 512.")
 
     def score(self, query: str, passages: Sequence[str]) -> tuple[NDArray[np.float32], list[bool]]:
         """Return the score of each pair, and whether each passage was cut."""
@@ -46,20 +47,15 @@ class OnnxCrossEncoderCompressor(BaseDocumentCompressor):
         ]
         return np.concatenate(scores).astype(np.float32), truncated
 
-    @override
-    def compress_documents(
-        self, documents: Sequence[Document], query: str, callbacks: Callbacks | None = None
-    ) -> Sequence[Document]:
-        if not documents:
+    def rerank(self, candidates: Sequence[Candidate], query: str) -> list[Candidate]:
+        """Return the best candidates with their rerank scores, best first."""
+        if not candidates:
             return []
-        scores, truncated = self.score(query, [_rerank_text(d) for d in documents])
+        scores, truncated = self.score(query, [f"{c.chunk.header}\n{c.chunk.text}" for c in candidates])
         ranked = sorted(
-            zip(documents, scores.tolist(), truncated, strict=True),
-            key=lambda item: (-item[1], lc_codec.chunk_id_of(item[0])),
+            zip(candidates, scores.tolist(), truncated, strict=True), key=lambda item: (-item[1], item[0].chunk_id)
         )
-        return [lc_codec.with_rerank_score(document, score, cut) for document, score, cut in ranked[: self.top_n]]
-
-
-def _rerank_text(document: Document) -> str:
-    chunk = lc_codec.document_to_chunk(document)
-    return f"{chunk.header}\n{chunk.text}"
+        return [
+            replace(candidate, scores=replace(candidate.scores, rerank_score=score, rerank_truncated=cut))
+            for candidate, score, cut in ranked[: self.top_n]
+        ]

@@ -1,6 +1,6 @@
 """`XatRag`: the public library facade and the composition root. See ADR 0003.
 
-The facade takes and returns xat-rag types only. `xat_rag.langchain` gives the LangChain objects.
+The facade takes and returns xat-rag types only.
 """
 
 import threading
@@ -19,7 +19,7 @@ from xat_rag_core.model import RawDocument, SourceKind
 from xat_rag_core.query import RetrievalQuery
 from xat_rag_sqlite.store import SqliteRagStore
 
-from xat_rag.index import RagIndex, Retrieved
+from xat_rag.index import RagIndex, Retrieved, split_rules_id
 from xat_rag.models import LoadedModels, load_models
 from xat_rag.recipes import ContextRecipe, Limits, RagRecipe, load_recipes
 from xat_rag.retrieve import ContextRequest, retrieve, retrieved_chunks
@@ -46,6 +46,7 @@ class XatRag:
         self._models = models
         self._rags = MappingProxyType(dict(rags))
         self._parse_lock = threading.Lock()  # One binary parse at a time (ADR 0012).
+        self._boundary_lock = threading.BoundedSemaphore(1)  # One split-point batch at a time, so queries can run.
         self._lock = threading.Lock()
         self._indexes: dict[str, RagIndex] = {}
         self._mismatched: dict[str, str] = {}
@@ -79,7 +80,9 @@ class XatRag:
         embedder = models.embedders[recipe.rag.embedder]
         counter = models.size_counter
         sha = models.embedder_sha256[recipe.rag.embedder]
-        store = SqliteRagStore(self._path(name), RagIndex.manifest(recipe, embedder, sha, counter.tokenizer_id))
+        identity = f"{embedder.model_id}-{sha[:12]}" if self.settings.semantic_split else None
+        rules = split_rules_id(identity, self.settings.overlap_share)
+        store = SqliteRagStore(self._path(name), RagIndex.manifest(recipe, embedder, sha, counter.tokenizer_id, rules))
         return RagIndex(
             recipe,
             store,
@@ -88,6 +91,11 @@ class XatRag:
             models.rerankers.get(recipe.rag.reranker),
             parse_lock=self._parse_lock,
             parse_deadline_seconds=self.settings.parse_deadline_seconds,
+            models_folder=self.settings.models_folder,
+            boundary_lock=self._boundary_lock,
+            split_rules=rules,
+            semantic_split=self.settings.semantic_split,
+            overlap_share=self.settings.overlap_share,
         )
 
     def rebuild(self, rag: str) -> None:
@@ -136,6 +144,7 @@ class XatRag:
             embedders={recipe.rag.embedder for recipe in rags.values()},
             rerankers={recipe.rag.reranker for recipe in rags.values()},
             threads=settings.threads,
+            layout_models=any(source.kind == "pdf" for recipe in rags.values() for source in recipe.sources.values()),
         )
         return XatRag(settings, rags, contexts, models)
 

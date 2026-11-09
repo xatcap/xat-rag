@@ -1,10 +1,10 @@
-"""JSON forms of the result types. The HTTP API has no LangChain types."""
+"""JSON forms of the result types."""
 
 from dataclasses import asdict
 from typing import Any
 
 from xat_rag.types import DocumentResult, RetrievalResult, RetrievedChunk
-from xat_rag_core.model import BlockSpan, LineSpan, PageSpan, Span
+from xat_rag_core.model import BlockSpan, CellSpan, LineSpan, PageSpan, Span
 from xat_rag_core.query import RetrievalQuery
 
 
@@ -23,6 +23,8 @@ def span_json(span: Span) -> dict[str, Any]:
             }
         case BlockSpan():
             return {"type": "block", "block_start": span.block_start, "block_end": span.block_end}
+        case CellSpan():
+            return {"type": "cell", "sheet": span.sheet, "row_start": span.row_start, "row_end": span.row_end}
 
 
 def document_result_json(result: DocumentResult) -> dict[str, Any]:

@@ -10,6 +10,7 @@ class Settings:
 
     `data_folder` holds one SQLite file for each RAG and the model check cache. The app owns it,
     and must protect it, because the indexes hold copies of sensitive text.
+    `semantic_split` and `overlap_share` exist for the evaluation of the split rules.
     """
 
     data_folder: Path
@@ -18,3 +19,5 @@ class Settings:
     lock_file: Path
     threads: int = 0
     parse_deadline_seconds: float = 60.0
+    semantic_split: bool = True
+    overlap_share: float = 0.0

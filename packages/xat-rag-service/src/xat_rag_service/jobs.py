@@ -22,7 +22,6 @@ from xat_rag_core.errors import (
     XatRagError,
 )
 from xat_rag_core.model import RawDocument
-from xat_rag_core.tracing import no_tracing
 
 _KEPT_FINISHED_JOBS = 200
 _MAX_QUEUED_BYTES = 256 * 1024 * 1024
@@ -103,39 +102,38 @@ class JobManager:
             del self._jobs[job_id]
 
     def _run(self, job: Job, documents: list[RawDocument]) -> None:
-        with no_tracing():
-            job.status = JobStatus.RUNNING
-            try:
-                while documents:
-                    if job.cancel.is_set() or self._stopping.is_set():
-                        job.status = JobStatus.CANCELLED
-                        return
-                    document = documents.pop(0)  # Drop each document after use, to free its bytes.
-                    job.document_started = time.monotonic()
-                    try:
-                        job.results.append(self._ingest(document))
-                    except XatRagError as error:  # One bad document does not stop the others (ADR 0009).
-                        job.results.append(
-                            DocumentResult(
-                                document.doc_id,
-                                "failed",
-                                error_type=error.error_type.value,
-                                message="The document could not be ingested.",
-                            )
-                        )
-                    job.document_started = None
+        job.status = JobStatus.RUNNING
+        try:
+            while documents:
+                if job.cancel.is_set() or self._stopping.is_set():
+                    job.status = JobStatus.CANCELLED
+                    return
+                document = documents.pop(0)  # Drop each document after use, to free its bytes.
+                job.document_started = time.monotonic()
                 try:
-                    self._checkpoint(job.rag)
-                except Exception as error:  # The documents are in. Only the WAL cleanup failed.
-                    job.notes.append(f"checkpoint_failed:{getattr(error, 'error_type', 'internal_error')}")
-                job.status = JobStatus.DONE
-            except Exception as error:  # A failed job is reported with its error type. Logs hold no content.
-                job.status = JobStatus.FAILED
-                job.error_type = str(getattr(error, "error_type", "internal_error"))
-            finally:
+                    job.results.append(self._ingest(document))
+                except XatRagError as error:  # One bad document does not stop the others (ADR 0009).
+                    job.results.append(
+                        DocumentResult(
+                            document.doc_id,
+                            "failed",
+                            error_type=error.error_type.value,
+                            message="The document could not be ingested.",
+                        )
+                    )
                 job.document_started = None
-                with self._lock:
-                    self._queued_bytes -= job.size
+            try:
+                self._checkpoint(job.rag)
+            except Exception as error:  # The documents are in. Only the WAL cleanup failed.
+                job.notes.append(f"checkpoint_failed:{getattr(error, 'error_type', 'internal_error')}")
+            job.status = JobStatus.DONE
+        except Exception as error:  # A failed job is reported with its error type. Logs hold no content.
+            job.status = JobStatus.FAILED
+            job.error_type = str(getattr(error, "error_type", "internal_error"))
+        finally:
+            job.document_started = None
+            with self._lock:
+                self._queued_bytes -= job.size
 
     def get(self, job_id: str) -> Job:
         """Return a job. Raise `NotFoundError` if it does not exist."""

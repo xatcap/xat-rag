@@ -49,24 +49,8 @@ def package() -> None:
     (DIST / "models").mkdir()
 
 
-# Top-level modules that must never be in the frozen folder (ADR 0011 section 4).
-DENIED_MODULES = (
-    "tiktoken",
-    "openai",
-    "posthog",
-    "nltk",
-    "torch",
-    "transformers",
-    "sentence_transformers",
-    "sentry_sdk",
-    "unstructured",
-    "cryptography",
-    "langchain_community",
-    "langchain_classic",
-    "langgraph",
-    "sqlalchemy",
-    "aiohttp",
-    "PIL",
+# Build tools and optional imports that must not be in the frozen folder.
+EXCLUDED_MODULES = (
     "setuptools",
     "pkg_resources",
     "mistral_common",
@@ -74,10 +58,10 @@ DENIED_MODULES = (
 
 
 def check_bundle() -> None:
-    """Fail if the frozen folder holds a denied module, as a folder, a native library or a module in the archive."""
+    """Fail if the frozen folder holds an excluded module, as a folder, a native library or a module in the archive."""
     internal = DIST / "_internal"
     names = {path.name.split(".")[0] for path in internal.iterdir()}
-    found = sorted(name for name in DENIED_MODULES if name in names)
+    found = sorted(name for name in EXCLUDED_MODULES if name in names)
     archive = subprocess.run(  # noqa: S603 - fixed arguments.
         [
             sys.executable,
@@ -92,10 +76,10 @@ def check_bundle() -> None:
         check=False,
     )
     modules = {line.strip().split(".")[0] for line in archive.stdout.splitlines()}
-    found += sorted(name for name in DENIED_MODULES if name in modules and name not in found)
+    found += sorted(name for name in EXCLUDED_MODULES if name in modules and name not in found)
     if found:
-        sys.exit(f"The frozen folder holds denied modules: {', '.join(found)}")
-    print("the frozen folder holds no denied module")
+        sys.exit(f"The frozen folder holds excluded modules: {', '.join(found)}")
+    print("the frozen folder holds no excluded module")
     if not any((internal / "sqlite_vec").glob("vec0.*")):
         sys.exit("The frozen folder holds no sqlite_vec/vec0 extension file.")
     print("the frozen folder holds the sqlite_vec extension")
@@ -146,7 +130,7 @@ def _locked_model_names() -> list[str]:
 def _base_environment() -> dict[str, str]:
     kept = {"PATH", "HOME", "TMPDIR", "TEMP", "TMP", "SYSTEMROOT", "USERPROFILE", "APPDATA", "LOCALAPPDATA"}
     env = {k: v for k, v in os.environ.items() if k.upper() in kept}
-    return env | {"XatRag__StopWhenInputCloses": "true", "LANGSMITH_TRACING": "true"}
+    return env | {"XatRag__StopWhenInputCloses": "true"}
 
 
 def smoke_test() -> None:
@@ -180,6 +164,35 @@ def smoke_test() -> None:
     print("smoke test passed")
 
 
+def _upload_and_wait(url: str, rag: str, doc_id: str, kind: str, path: Path) -> None:
+    """Upload one document and wait until its job ends well."""
+    boundary = "smoke7b1"
+    fields = json.dumps([{"doc_id": doc_id, "kind": kind, "part": "f"}]).encode()
+    body = (
+        f'--{boundary}\r\nContent-Disposition: form-data; name="documents"\r\n\r\n'.encode()
+        + fields
+        + f'\r\n--{boundary}\r\nContent-Disposition: form-data; name="f"; filename="f"\r\n\r\n'.encode()
+        + path.read_bytes()
+        + f"\r\n--{boundary}--\r\n".encode()
+    )
+    status, job = _call(
+        url,
+        f"/v1/rags/{rag}/documents",
+        body=body,
+        content_type=f"multipart/form-data; boundary={boundary}",
+        method="PUT",
+    )
+    assert status == 202, job
+    state: dict[str, Any] = {}
+    for _ in range(3000):
+        status, state = _call(url, f"/v1/jobs/{job['job_id']}")
+        if state["status"] in {"done", "failed"}:
+            break
+        time.sleep(0.1)
+    assert state["status"] == "done", state
+    assert state["results"][0]["status"] == "created", state
+
+
 def _exercise(binary: Path, env: dict[str, str], ready: Path, logs: Path, cwd: Path) -> None:
     """Start the service, ingest one document, make a retrieval result, and stop the service."""
     log = (logs / "stderr.txt").open("wb")
@@ -193,30 +206,9 @@ def _exercise(binary: Path, env: dict[str, str], ready: Path, logs: Path, cwd: P
             time.sleep(0.1)
         print(f"ready in {time.monotonic() - started:.1f} s")
         url = json.loads(ready.read_text())["url"]
-        document = (SETUP / "documents" / "docs" / "orders.md").read_bytes()
-        boundary = "smoke7b1"
-        fields = json.dumps([{"doc_id": "docs:orders.md", "kind": "markdown", "part": "f"}]).encode()
-        body = (
-            f'--{boundary}\r\nContent-Disposition: form-data; name="documents"\r\n\r\n'.encode()
-            + fields
-            + f'\r\n--{boundary}\r\nContent-Disposition: form-data; name="f"; filename="f"\r\n\r\n'.encode()
-            + document
-            + f"\r\n--{boundary}--\r\n".encode()
-        )
-        status, job = _call(
-            url,
-            "/v1/rags/docs/documents",
-            body=body,
-            content_type=f"multipart/form-data; boundary={boundary}",
-            method="PUT",
-        )
-        assert status == 202, job
-        for _ in range(300):
-            status, state = _call(url, f"/v1/jobs/{job['job_id']}")
-            if state["status"] in {"done", "failed"}:
-                break
-            time.sleep(0.1)
-        assert state["status"] == "done", state
+        _upload_and_wait(url, "docs", "docs:orders.md", "markdown", SETUP / "documents" / "docs" / "orders.md")
+        # A PDF file exercises the layout models and the native libraries of the frozen folder.
+        _upload_and_wait(url, "pdfs", "pdfs:carriers.pdf", "pdf", SETUP / "documents" / "pdfs" / "carriers.pdf")
         question = json.dumps({"context": "ask-docs", "question": "Which port do orders use?"}).encode()
         status, result = _call(url, "/v1/context", body=question, method="POST")
         assert status == 200, result

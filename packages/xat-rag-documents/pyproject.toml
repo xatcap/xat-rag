@@ -1,15 +1,13 @@
 [project]
 name = "xat-rag-documents"
 version = "0.1.0"
-description = "PDF, DOCX and HTML parsers of xat-rag, with limits against bad files."
+description = "PDF, DOCX, HTML and Excel parsers of xat-rag, with limits against bad files."
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
 dependencies = [
     "xat-rag-core",
-    "pypdf==7.0.0",
-    "python-docx==1.2.0",
-    "beautifulsoup4==4.15.0",
+    "docling==2.149.0",
 ]
 
 [tool.uv.sources]

@@ -73,8 +73,8 @@ def test_fts_query_with_many_terms(store: SqliteRagStore) -> None:
 def test_fts_operators_in_the_query_are_plain_words(store: SqliteRagStore) -> None:
     upsert(store, document("d:1", "a"), [chunk("d:1", "a", "a and not near or b")], CountingEmbedder())
     retriever = Fts5Retriever(store=store, k=5)
-    assert len(retriever.invoke('AND OR NOT NEAR( "quote *star ^caret {brace} -dash col:on')) == 1
-    assert len(retriever.invoke("NOT")) == 1
+    assert len(retriever.search('AND OR NOT NEAR( "quote *star ^caret {brace} -dash col:on')) == 1
+    assert len(retriever.search("NOT")) == 1
 
 
 def test_fts_ranks_by_bm25_then_chunk_id(store: SqliteRagStore) -> None:

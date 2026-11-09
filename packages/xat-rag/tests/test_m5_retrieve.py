@@ -489,7 +489,9 @@ def test_a_diff_chunk_has_a_line_span_and_its_metadata(rag: XatRag) -> None:
 
 def test_a_pdf_chunk_has_a_page_span_the_page_anchor_and_the_version(rag: XatRag) -> None:
     chunks = chunks_of(rag, "files:manual.pdf")
-    assert {c.source.span.page_start for c in chunks if isinstance(c.source.span, PageSpan)} == {1, 3}
+    assert [
+        (c.source.span.page_start, c.source.span.page_end) for c in chunks if isinstance(c.source.span, PageSpan)
+    ] == [(1, 3)]
     for chunk in chunks:
         assert isinstance(chunk.source.span, PageSpan)
         assert chunk.source.source_kind == "pdf"
@@ -510,11 +512,11 @@ def test_a_docx_chunk_has_a_block_span(rag: XatRag) -> None:
     assert any("billing" in chunk.text.lower() for chunk in chunks)
 
 
-def test_an_html_chunk_has_a_line_span_of_the_html_source(rag: XatRag) -> None:
+def test_an_html_chunk_has_a_block_span(rag: XatRag) -> None:
     chunks = chunks_of(rag, "files:guide.html")
     assert chunks
     for chunk in chunks:
-        assert isinstance(chunk.source.span, LineSpan)
+        assert isinstance(chunk.source.span, BlockSpan)
         assert chunk.source.source_kind == "html"
         assert chunk.source.version == "2"
     text = " ".join(chunk.text for chunk in chunks)

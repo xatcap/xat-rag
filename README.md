@@ -15,11 +15,16 @@ xat-rag is for developers of desktop apps who want these things:
 
 - Retrieved text from their own docs, tickets, code changes and prompt files.
 - Results that the app can check, cite and show, with a link to each source.
-- No network access except on loopback, no telemetry and no downloads at runtime.
+- No network access except on loopback, and no downloads at runtime.
 
 ## How it works
 
-1. The app sends documents to named RAGs. The formats are Markdown, text, unified diffs, JIRA issue JSON, prompt files, PDF, DOCX and HTML.
+1. The app sends documents to named RAGs. The formats are:
+
+   - Markdown and text.
+   - Unified diffs.
+   - JIRA issue JSON and prompt files.
+   - PDF, DOCX, HTML and Excel (`.xlsx`).
 2. xat-rag splits each document by its structure, and indexes it for keyword search and vector search.
 3. The app asks a question in a named context. A context is a group of RAGs.
 4. xat-rag searches each RAG, reranks the results and merges them.
@@ -32,6 +37,10 @@ Read [how it works](docs/how-it-works.md) for each step.
 - It does not call an LLM, write answers, build prompts or fit text to a token limit. The app does these tasks.
 - It does not connect to JIRA, GitHub or other network services. The app sends the documents.
 - It is not a server for a team. It accepts requests only from programs on the same machine, and it has no authentication.
+
+## Telemetry
+
+xat-rag sends no telemetry. It turns off the telemetry of ONNX Runtime, the library that runs its models, by a variable and by an API call. This was checked on macOS only. On Windows, ONNX Runtime may still send one event when it first starts.
 
 ## Quick start
 

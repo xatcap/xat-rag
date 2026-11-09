@@ -12,7 +12,7 @@ from xat_rag_core.errors import ConfigError
 from xat_rag_core.ranking import MAX_CHUNKS
 
 _NAME = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
-SourceKindName = Literal["markdown", "text", "diff", "jira", "prompt", "pdf", "docx", "html"]
+SourceKindName = Literal["markdown", "text", "diff", "jira", "prompt", "pdf", "docx", "html", "xlsx"]
 
 
 class _Strict(BaseModel):

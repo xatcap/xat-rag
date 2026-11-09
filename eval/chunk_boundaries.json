@@ -178,5 +178,1014 @@
    "start": 1,
    "type": "line"
   }
+ },
+ {
+  "chunk_id": "pdfs:carriers.pdf#h/halden-carrier-and-claims-manual/carrier-contracts",
+  "hash": "a88aa78b0e2ffbba",
+  "span": {
+   "end": 1,
+   "label_end": "1",
+   "label_start": "1",
+   "start": 1,
+   "type": "page"
+  }
+ },
+ {
+  "chunk_id": "pdfs:carriers.pdf#h/halden-carrier-and-claims-manual/claims-handling/~s1",
+  "hash": "f41bf5a1b71f7aa4",
+  "span": {
+   "end": 1,
+   "label_end": "1",
+   "label_start": "1",
+   "start": 1,
+   "type": "page"
+  }
+ },
+ {
+  "chunk_id": "pdfs:carriers.pdf#h/halden-carrier-and-claims-manual/claims-handling/~s2",
+  "hash": "3b7b1d5192092ab0",
+  "span": {
+   "end": 1,
+   "label_end": "1",
+   "label_start": "1",
+   "start": 1,
+   "type": "page"
+  }
+ },
+ {
+  "chunk_id": "pdfs:carriers.pdf#h/halden-carrier-and-claims-manual/claims-handling/~s3",
+  "hash": "f36e6ea0b4f8614e",
+  "span": {
+   "end": 1,
+   "label_end": "1",
+   "label_start": "1",
+   "start": 1,
+   "type": "page"
+  }
+ },
+ {
+  "chunk_id": "pdfs:carriers.pdf#h/halden-carrier-and-claims-manual/hazardous-goods/~s1",
+  "hash": "b1a5ba8ba5a8144c",
+  "span": {
+   "end": 2,
+   "label_end": "2",
+   "label_start": "1",
+   "start": 1,
+   "type": "page"
+  }
+ },
+ {
+  "chunk_id": "pdfs:carriers.pdf#h/halden-carrier-and-claims-manual/hazardous-goods/~s2",
+  "hash": "0dbb1abc829ee6af",
+  "span": {
+   "end": 2,
+   "label_end": "2",
+   "label_start": "2",
+   "start": 2,
+   "type": "page"
+  }
+ },
+ {
+  "chunk_id": "pdfs:people.pdf#h/halden-people-and-travel-guide/leave-and-working-time/~s1",
+  "hash": "ae7e1198f44214bb",
+  "span": {
+   "end": 1,
+   "label_end": "1",
+   "label_start": "1",
+   "start": 1,
+   "type": "page"
+  }
+ },
+ {
+  "chunk_id": "pdfs:people.pdf#h/halden-people-and-travel-guide/leave-and-working-time/~s2",
+  "hash": "f5c909f8b0844777",
+  "span": {
+   "end": 1,
+   "label_end": "1",
+   "label_start": "1",
+   "start": 1,
+   "type": "page"
+  }
+ },
+ {
+  "chunk_id": "pdfs:people.pdf#h/halden-people-and-travel-guide/travel-and-expenses/~s1",
+  "hash": "831eca669ad4a091",
+  "span": {
+   "end": 1,
+   "label_end": "1",
+   "label_start": "1",
+   "start": 1,
+   "type": "page"
+  }
+ },
+ {
+  "chunk_id": "pdfs:people.pdf#h/halden-people-and-travel-guide/travel-and-expenses/~s2",
+  "hash": "9752bf2eb8f8147a",
+  "span": {
+   "end": 2,
+   "label_end": "2",
+   "label_start": "1",
+   "start": 1,
+   "type": "page"
+  }
+ },
+ {
+  "chunk_id": "pdfs:people.pdf#h/halden-people-and-travel-guide/learning-and-wellbeing/~s1",
+  "hash": "7d2d791fd6622116",
+  "span": {
+   "end": 2,
+   "label_end": "2",
+   "label_start": "2",
+   "start": 2,
+   "type": "page"
+  }
+ },
+ {
+  "chunk_id": "pdfs:people.pdf#h/halden-people-and-travel-guide/learning-and-wellbeing/~s2",
+  "hash": "17456f384ec4b1cd",
+  "span": {
+   "end": 2,
+   "label_end": "2",
+   "label_start": "2",
+   "start": 2,
+   "type": "page"
+  }
+ },
+ {
+  "chunk_id": "pdfs:people.pdf#h/halden-people-and-travel-guide/learning-and-wellbeing/~s3",
+  "hash": "b3d4f910d52025fa",
+  "span": {
+   "end": 2,
+   "label_end": "2",
+   "label_start": "2",
+   "start": 2,
+   "type": "page"
+  }
+ },
+ {
+  "chunk_id": "pdfs:people.pdf#h/halden-people-and-travel-guide/learning-and-wellbeing/~s4",
+  "hash": "88e1bd33dd153593",
+  "span": {
+   "end": 2,
+   "label_end": "2",
+   "label_start": "2",
+   "start": 2,
+   "type": "page"
+  }
+ },
+ {
+  "chunk_id": "pdfs:warehouse.pdf#h/halden-warehouse-operations/receiving-goods",
+  "hash": "05dfc856df8bd881",
+  "span": {
+   "end": 1,
+   "label_end": "1",
+   "label_start": "1",
+   "start": 1,
+   "type": "page"
+  }
+ },
+ {
+  "chunk_id": "pdfs:warehouse.pdf#h/halden-warehouse-operations/cold-storage",
+  "hash": "2328edfa08ae7308",
+  "span": {
+   "end": 1,
+   "label_end": "1",
+   "label_start": "1",
+   "start": 1,
+   "type": "page"
+  }
+ },
+ {
+  "chunk_id": "pdfs:warehouse.pdf#h/halden-warehouse-operations/equipment-and-site-safety/~s1",
+  "hash": "49659e4560d53fe2",
+  "span": {
+   "end": 1,
+   "label_end": "1",
+   "label_start": "1",
+   "start": 1,
+   "type": "page"
+  }
+ },
+ {
+  "chunk_id": "pdfs:warehouse.pdf#h/halden-warehouse-operations/equipment-and-site-safety/~s2",
+  "hash": "165192d9a1dde434",
+  "span": {
+   "end": 1,
+   "label_end": "1",
+   "label_start": "1",
+   "start": 1,
+   "type": "page"
+  }
+ },
+ {
+  "chunk_id": "pdfs:warehouse.pdf#h/halden-warehouse-operations/equipment-and-site-safety/~s3",
+  "hash": "a1423f48767c94b1",
+  "span": {
+   "end": 2,
+   "label_end": "2",
+   "label_start": "1",
+   "start": 1,
+   "type": "page"
+  }
+ },
+ {
+  "chunk_id": "pdfs:warehouse.pdf#h/halden-warehouse-operations/equipment-and-site-safety/~s4",
+  "hash": "0e356fce29bbb08f",
+  "span": {
+   "end": 2,
+   "label_end": "2",
+   "label_start": "2",
+   "start": 2,
+   "type": "page"
+  }
+ },
+ {
+  "chunk_id": "pdfs:warehouse.pdf#h/halden-warehouse-operations/equipment-and-site-safety/~s5",
+  "hash": "3ae71183fbd1856e",
+  "span": {
+   "end": 2,
+   "label_end": "2",
+   "label_start": "2",
+   "start": 2,
+   "type": "page"
+  }
+ },
+ {
+  "chunk_id": "pdfs:warehouse.pdf#h/halden-warehouse-operations/picking-and-dispatch/~s1",
+  "hash": "c6bcc6e8474ef6d0",
+  "span": {
+   "end": 2,
+   "label_end": "2",
+   "label_start": "2",
+   "start": 2,
+   "type": "page"
+  }
+ },
+ {
+  "chunk_id": "pdfs:warehouse.pdf#h/halden-warehouse-operations/picking-and-dispatch/~s2",
+  "hash": "8034fa92a5a984b5",
+  "span": {
+   "end": 3,
+   "label_end": "3",
+   "label_start": "2",
+   "start": 2,
+   "type": "page"
+  }
+ },
+ {
+  "chunk_id": "sheets:carriers.xlsx#h/carrier-contracts",
+  "hash": "f7e80d0ddbcd29de",
+  "span": {
+   "end": 5,
+   "sheet": "Carrier contracts",
+   "start": 1,
+   "type": "cell"
+  }
+ },
+ {
+  "chunk_id": "sheets:carriers.xlsx#h/claims-handling/~s1",
+  "hash": "ee9f6151a8645aa7",
+  "span": {
+   "end": 2,
+   "sheet": "Claims handling",
+   "start": 2,
+   "type": "cell"
+  }
+ },
+ {
+  "chunk_id": "sheets:carriers.xlsx#h/claims-handling/~s2",
+  "hash": "57a5ba15fb7610c2",
+  "span": {
+   "end": 3,
+   "sheet": "Claims handling",
+   "start": 3,
+   "type": "cell"
+  }
+ },
+ {
+  "chunk_id": "sheets:carriers.xlsx#h/claims-handling/~s3",
+  "hash": "855491b3a2f275cf",
+  "span": {
+   "end": 4,
+   "sheet": "Claims handling",
+   "start": 4,
+   "type": "cell"
+  }
+ },
+ {
+  "chunk_id": "sheets:carriers.xlsx#h/hazardous-goods/~s1",
+  "hash": "d582e44fb234e1cf",
+  "span": {
+   "end": 2,
+   "sheet": "Hazardous goods",
+   "start": 2,
+   "type": "cell"
+  }
+ },
+ {
+  "chunk_id": "sheets:carriers.xlsx#h/hazardous-goods/~s2",
+  "hash": "528a25ec89915895",
+  "span": {
+   "end": 3,
+   "sheet": "Hazardous goods",
+   "start": 3,
+   "type": "cell"
+  }
+ },
+ {
+  "chunk_id": "sheets:carriers.xlsx#h/hazardous-goods/~s3",
+  "hash": "a494a34bf9781348",
+  "span": {
+   "end": 4,
+   "sheet": "Hazardous goods",
+   "start": 4,
+   "type": "cell"
+  }
+ },
+ {
+  "chunk_id": "sheets:people.xlsx#h/leave-and-working-time/~s1",
+  "hash": "53f90c932ecc6ea3",
+  "span": {
+   "end": 2,
+   "sheet": "Leave and working time",
+   "start": 2,
+   "type": "cell"
+  }
+ },
+ {
+  "chunk_id": "sheets:people.xlsx#h/leave-and-working-time/~s2",
+  "hash": "522b2b786ad007ea",
+  "span": {
+   "end": 3,
+   "sheet": "Leave and working time",
+   "start": 3,
+   "type": "cell"
+  }
+ },
+ {
+  "chunk_id": "sheets:people.xlsx#h/leave-and-working-time/~s3",
+  "hash": "8085c82dc48e545d",
+  "span": {
+   "end": 4,
+   "sheet": "Leave and working time",
+   "start": 4,
+   "type": "cell"
+  }
+ },
+ {
+  "chunk_id": "sheets:people.xlsx#h/travel-and-expenses/~s1",
+  "hash": "0827f107fd3d4907",
+  "span": {
+   "end": 2,
+   "sheet": "Travel and expenses",
+   "start": 2,
+   "type": "cell"
+  }
+ },
+ {
+  "chunk_id": "sheets:people.xlsx#h/travel-and-expenses/~s2",
+  "hash": "18cb506060b17414",
+  "span": {
+   "end": 3,
+   "sheet": "Travel and expenses",
+   "start": 3,
+   "type": "cell"
+  }
+ },
+ {
+  "chunk_id": "sheets:people.xlsx#h/travel-and-expenses/~s3",
+  "hash": "9c45ed682c31a57d",
+  "span": {
+   "end": 4,
+   "sheet": "Travel and expenses",
+   "start": 4,
+   "type": "cell"
+  }
+ },
+ {
+  "chunk_id": "sheets:people.xlsx#h/learning-and-wellbeing/~s1",
+  "hash": "b972e04428255ed5",
+  "span": {
+   "end": 2,
+   "sheet": "Learning and wellbeing",
+   "start": 2,
+   "type": "cell"
+  }
+ },
+ {
+  "chunk_id": "sheets:people.xlsx#h/learning-and-wellbeing/~s2",
+  "hash": "dd7c2620b6a4759c",
+  "span": {
+   "end": 3,
+   "sheet": "Learning and wellbeing",
+   "start": 3,
+   "type": "cell"
+  }
+ },
+ {
+  "chunk_id": "sheets:people.xlsx#h/learning-and-wellbeing/~s3",
+  "hash": "a33fb51711895781",
+  "span": {
+   "end": 4,
+   "sheet": "Learning and wellbeing",
+   "start": 4,
+   "type": "cell"
+  }
+ },
+ {
+  "chunk_id": "sheets:people.xlsx#h/learning-and-wellbeing/~s4",
+  "hash": "299d38fffee1e8b4",
+  "span": {
+   "end": 5,
+   "sheet": "Learning and wellbeing",
+   "start": 5,
+   "type": "cell"
+  }
+ },
+ {
+  "chunk_id": "sheets:warehouse.xlsx#h/receiving-goods",
+  "hash": "d21404c56cc640f3",
+  "span": {
+   "end": 2,
+   "sheet": "Receiving goods",
+   "start": 1,
+   "type": "cell"
+  }
+ },
+ {
+  "chunk_id": "sheets:warehouse.xlsx#h/cold-storage",
+  "hash": "db9aa7694188957a",
+  "span": {
+   "end": 2,
+   "sheet": "Cold storage",
+   "start": 1,
+   "type": "cell"
+  }
+ },
+ {
+  "chunk_id": "sheets:warehouse.xlsx#h/equipment-and-site-safety/~s1",
+  "hash": "851fbd38afb411fb",
+  "span": {
+   "end": 2,
+   "sheet": "Equipment and site safety",
+   "start": 2,
+   "type": "cell"
+  }
+ },
+ {
+  "chunk_id": "sheets:warehouse.xlsx#h/equipment-and-site-safety/~s2",
+  "hash": "a1a015dc8702ff23",
+  "span": {
+   "end": 3,
+   "sheet": "Equipment and site safety",
+   "start": 3,
+   "type": "cell"
+  }
+ },
+ {
+  "chunk_id": "sheets:warehouse.xlsx#h/equipment-and-site-safety/~s3",
+  "hash": "c9b1d90b84b1e857",
+  "span": {
+   "end": 4,
+   "sheet": "Equipment and site safety",
+   "start": 4,
+   "type": "cell"
+  }
+ },
+ {
+  "chunk_id": "sheets:warehouse.xlsx#h/equipment-and-site-safety/~s4",
+  "hash": "a739194fc15d5dbb",
+  "span": {
+   "end": 5,
+   "sheet": "Equipment and site safety",
+   "start": 5,
+   "type": "cell"
+  }
+ },
+ {
+  "chunk_id": "sheets:warehouse.xlsx#h/equipment-and-site-safety/~s5",
+  "hash": "3da47c99d6fbfa95",
+  "span": {
+   "end": 6,
+   "sheet": "Equipment and site safety",
+   "start": 6,
+   "type": "cell"
+  }
+ },
+ {
+  "chunk_id": "sheets:warehouse.xlsx#h/picking-and-dispatch/~s1",
+  "hash": "81fbb9ba1f4c96c7",
+  "span": {
+   "end": 2,
+   "sheet": "Picking and dispatch",
+   "start": 2,
+   "type": "cell"
+  }
+ },
+ {
+  "chunk_id": "sheets:warehouse.xlsx#h/picking-and-dispatch/~s2",
+  "hash": "dc44c4c4e7ad77c6",
+  "span": {
+   "end": 3,
+   "sheet": "Picking and dispatch",
+   "start": 3,
+   "type": "cell"
+  }
+ },
+ {
+  "chunk_id": "sheets:warehouse.xlsx#h/picking-and-dispatch/~s3",
+  "hash": "f373304432f1957d",
+  "span": {
+   "end": 4,
+   "sheet": "Picking and dispatch",
+   "start": 4,
+   "type": "cell"
+  }
+ },
+ {
+  "chunk_id": "web:carriers.html#h/halden-carrier-and-claims-manual/carrier-contracts",
+  "hash": "a88aa78b0e2ffbba",
+  "span": {
+   "end": 3,
+   "start": 3,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "web:carriers.html#h/halden-carrier-and-claims-manual/claims-handling/~s1",
+  "hash": "f41bf5a1b71f7aa4",
+  "span": {
+   "end": 5,
+   "start": 5,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "web:carriers.html#h/halden-carrier-and-claims-manual/claims-handling/~s2",
+  "hash": "3b7b1d5192092ab0",
+  "span": {
+   "end": 6,
+   "start": 6,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "web:carriers.html#h/halden-carrier-and-claims-manual/claims-handling/~s3",
+  "hash": "f36e6ea0b4f8614e",
+  "span": {
+   "end": 7,
+   "start": 7,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "web:carriers.html#h/halden-carrier-and-claims-manual/hazardous-goods/~s1",
+  "hash": "4eb692282c86a1b6",
+  "span": {
+   "end": 9,
+   "start": 9,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "web:carriers.html#h/halden-carrier-and-claims-manual/hazardous-goods/~s2",
+  "hash": "487e11398911b2f9",
+  "span": {
+   "end": 10,
+   "start": 10,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "web:carriers.html#h/halden-carrier-and-claims-manual/hazardous-goods/~s3",
+  "hash": "f337f09dc2d09428",
+  "span": {
+   "end": 11,
+   "start": 11,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "web:people.html#h/halden-people-and-travel-guide/leave-and-working-time/~s1",
+  "hash": "452e31d43add121b",
+  "span": {
+   "end": 3,
+   "start": 3,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "web:people.html#h/halden-people-and-travel-guide/leave-and-working-time/~s2",
+  "hash": "a601be473051d3c3",
+  "span": {
+   "end": 4,
+   "start": 4,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "web:people.html#h/halden-people-and-travel-guide/leave-and-working-time/~s3",
+  "hash": "3a01a9145611f186",
+  "span": {
+   "end": 5,
+   "start": 5,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "web:people.html#h/halden-people-and-travel-guide/travel-and-expenses/~s1",
+  "hash": "99a79cf7e3ec260f",
+  "span": {
+   "end": 7,
+   "start": 7,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "web:people.html#h/halden-people-and-travel-guide/travel-and-expenses/~s2",
+  "hash": "1e0bd88278145b68",
+  "span": {
+   "end": 8,
+   "start": 8,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "web:people.html#h/halden-people-and-travel-guide/travel-and-expenses/~s3",
+  "hash": "24c7d8c916eafa64",
+  "span": {
+   "end": 9,
+   "start": 9,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "web:people.html#h/halden-people-and-travel-guide/learning-and-wellbeing/~s1",
+  "hash": "7d2d791fd6622116",
+  "span": {
+   "end": 11,
+   "start": 11,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "web:people.html#h/halden-people-and-travel-guide/learning-and-wellbeing/~s2",
+  "hash": "17456f384ec4b1cd",
+  "span": {
+   "end": 12,
+   "start": 12,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "web:people.html#h/halden-people-and-travel-guide/learning-and-wellbeing/~s3",
+  "hash": "b3d4f910d52025fa",
+  "span": {
+   "end": 13,
+   "start": 13,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "web:people.html#h/halden-people-and-travel-guide/learning-and-wellbeing/~s4",
+  "hash": "4c9acf84d5011110",
+  "span": {
+   "end": 14,
+   "start": 14,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "web:warehouse.html#h/halden-warehouse-operations/receiving-goods",
+  "hash": "05dfc856df8bd881",
+  "span": {
+   "end": 3,
+   "start": 3,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "web:warehouse.html#h/halden-warehouse-operations/cold-storage",
+  "hash": "2328edfa08ae7308",
+  "span": {
+   "end": 5,
+   "start": 5,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "web:warehouse.html#h/halden-warehouse-operations/equipment-and-site-safety/~s1",
+  "hash": "49659e4560d53fe2",
+  "span": {
+   "end": 7,
+   "start": 7,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "web:warehouse.html#h/halden-warehouse-operations/equipment-and-site-safety/~s2",
+  "hash": "165192d9a1dde434",
+  "span": {
+   "end": 8,
+   "start": 8,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "web:warehouse.html#h/halden-warehouse-operations/equipment-and-site-safety/~s3",
+  "hash": "42cb287a174661f3",
+  "span": {
+   "end": 9,
+   "start": 9,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "web:warehouse.html#h/halden-warehouse-operations/equipment-and-site-safety/~s4",
+  "hash": "1fe5fabb3d86f1da",
+  "span": {
+   "end": 10,
+   "start": 10,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "web:warehouse.html#h/halden-warehouse-operations/equipment-and-site-safety/~s5",
+  "hash": "e587d7e1b4b5ed6c",
+  "span": {
+   "end": 11,
+   "start": 11,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "web:warehouse.html#h/halden-warehouse-operations/picking-and-dispatch/~s1",
+  "hash": "e6bf785952822cb1",
+  "span": {
+   "end": 13,
+   "start": 13,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "web:warehouse.html#h/halden-warehouse-operations/picking-and-dispatch/~s2",
+  "hash": "50ee0a3b29a974c2",
+  "span": {
+   "end": 14,
+   "start": 14,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "web:warehouse.html#h/halden-warehouse-operations/picking-and-dispatch/~s3",
+  "hash": "37ce0fba5adf8eb3",
+  "span": {
+   "end": 15,
+   "start": 15,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "word:carriers.docx#h/halden-carrier-and-claims-manual/carrier-contracts",
+  "hash": "a88aa78b0e2ffbba",
+  "span": {
+   "end": 3,
+   "start": 3,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "word:carriers.docx#h/halden-carrier-and-claims-manual/claims-handling/~s1",
+  "hash": "f41bf5a1b71f7aa4",
+  "span": {
+   "end": 5,
+   "start": 5,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "word:carriers.docx#h/halden-carrier-and-claims-manual/claims-handling/~s2",
+  "hash": "3b7b1d5192092ab0",
+  "span": {
+   "end": 6,
+   "start": 6,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "word:carriers.docx#h/halden-carrier-and-claims-manual/claims-handling/~s3",
+  "hash": "f36e6ea0b4f8614e",
+  "span": {
+   "end": 7,
+   "start": 7,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "word:carriers.docx#h/halden-carrier-and-claims-manual/hazardous-goods/~s1",
+  "hash": "4eb692282c86a1b6",
+  "span": {
+   "end": 9,
+   "start": 9,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "word:carriers.docx#h/halden-carrier-and-claims-manual/hazardous-goods/~s2",
+  "hash": "487e11398911b2f9",
+  "span": {
+   "end": 10,
+   "start": 10,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "word:carriers.docx#h/halden-carrier-and-claims-manual/hazardous-goods/~s3",
+  "hash": "f337f09dc2d09428",
+  "span": {
+   "end": 11,
+   "start": 11,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "word:people.docx#h/halden-people-and-travel-guide/leave-and-working-time/~s1",
+  "hash": "452e31d43add121b",
+  "span": {
+   "end": 3,
+   "start": 3,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "word:people.docx#h/halden-people-and-travel-guide/leave-and-working-time/~s2",
+  "hash": "a601be473051d3c3",
+  "span": {
+   "end": 4,
+   "start": 4,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "word:people.docx#h/halden-people-and-travel-guide/leave-and-working-time/~s3",
+  "hash": "3a01a9145611f186",
+  "span": {
+   "end": 5,
+   "start": 5,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "word:people.docx#h/halden-people-and-travel-guide/travel-and-expenses/~s1",
+  "hash": "99a79cf7e3ec260f",
+  "span": {
+   "end": 7,
+   "start": 7,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "word:people.docx#h/halden-people-and-travel-guide/travel-and-expenses/~s2",
+  "hash": "1e0bd88278145b68",
+  "span": {
+   "end": 8,
+   "start": 8,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "word:people.docx#h/halden-people-and-travel-guide/travel-and-expenses/~s3",
+  "hash": "24c7d8c916eafa64",
+  "span": {
+   "end": 9,
+   "start": 9,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "word:people.docx#h/halden-people-and-travel-guide/learning-and-wellbeing/~s1",
+  "hash": "7d2d791fd6622116",
+  "span": {
+   "end": 11,
+   "start": 11,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "word:people.docx#h/halden-people-and-travel-guide/learning-and-wellbeing/~s2",
+  "hash": "17456f384ec4b1cd",
+  "span": {
+   "end": 12,
+   "start": 12,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "word:people.docx#h/halden-people-and-travel-guide/learning-and-wellbeing/~s3",
+  "hash": "b3d4f910d52025fa",
+  "span": {
+   "end": 13,
+   "start": 13,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "word:people.docx#h/halden-people-and-travel-guide/learning-and-wellbeing/~s4",
+  "hash": "4c9acf84d5011110",
+  "span": {
+   "end": 14,
+   "start": 14,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "word:warehouse.docx#h/halden-warehouse-operations/receiving-goods",
+  "hash": "05dfc856df8bd881",
+  "span": {
+   "end": 3,
+   "start": 3,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "word:warehouse.docx#h/halden-warehouse-operations/cold-storage",
+  "hash": "2328edfa08ae7308",
+  "span": {
+   "end": 5,
+   "start": 5,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "word:warehouse.docx#h/halden-warehouse-operations/equipment-and-site-safety/~s1",
+  "hash": "49659e4560d53fe2",
+  "span": {
+   "end": 7,
+   "start": 7,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "word:warehouse.docx#h/halden-warehouse-operations/equipment-and-site-safety/~s2",
+  "hash": "165192d9a1dde434",
+  "span": {
+   "end": 8,
+   "start": 8,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "word:warehouse.docx#h/halden-warehouse-operations/equipment-and-site-safety/~s3",
+  "hash": "42cb287a174661f3",
+  "span": {
+   "end": 9,
+   "start": 9,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "word:warehouse.docx#h/halden-warehouse-operations/equipment-and-site-safety/~s4",
+  "hash": "1fe5fabb3d86f1da",
+  "span": {
+   "end": 10,
+   "start": 10,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "word:warehouse.docx#h/halden-warehouse-operations/equipment-and-site-safety/~s5",
+  "hash": "e587d7e1b4b5ed6c",
+  "span": {
+   "end": 11,
+   "start": 11,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "word:warehouse.docx#h/halden-warehouse-operations/picking-and-dispatch/~s1",
+  "hash": "e6bf785952822cb1",
+  "span": {
+   "end": 13,
+   "start": 13,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "word:warehouse.docx#h/halden-warehouse-operations/picking-and-dispatch/~s2",
+  "hash": "50ee0a3b29a974c2",
+  "span": {
+   "end": 14,
+   "start": 14,
+   "type": "block"
+  }
+ },
+ {
+  "chunk_id": "word:warehouse.docx#h/halden-warehouse-operations/picking-and-dispatch/~s3",
+  "hash": "37ce0fba5adf8eb3",
+  "span": {
+   "end": 15,
+   "start": 15,
+   "type": "block"
+  }
  }
 ]

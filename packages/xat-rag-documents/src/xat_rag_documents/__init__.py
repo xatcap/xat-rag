@@ -1,8 +1,21 @@
-"""PDF, DOCX and HTML parsers of xat-rag."""
+"""PDF, DOCX, HTML and Excel parsers of xat-rag."""
 
-from xat_rag_documents.docx import DocxParser
-from xat_rag_documents.html import HtmlParser
+from xat_rag_documents.docling_parsers import (
+    PDF_SECONDS_PER_PAGE,
+    DocxParser,
+    HtmlParser,
+    PdfParser,
+    XlsxParser,
+    longest_parse_seconds,
+)
 from xat_rag_documents.limits import DocumentLimits
-from xat_rag_documents.pdf import PdfParser
 
-__all__ = ["DocumentLimits", "DocxParser", "HtmlParser", "PdfParser"]
+__all__ = [
+    "PDF_SECONDS_PER_PAGE",
+    "DocumentLimits",
+    "DocxParser",
+    "HtmlParser",
+    "PdfParser",
+    "XlsxParser",
+    "longest_parse_seconds",
+]

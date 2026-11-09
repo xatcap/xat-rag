@@ -23,7 +23,6 @@ class DocumentLimits:
     max_docx_main_part: int = 64 * MIB
     max_zip_ratio: int = 100
     max_html_elements: int = 500_000
-    max_decompressed_stream: int = 32 * MIB
 
 
 def check_size(data: bytes, limit: int) -> None:
