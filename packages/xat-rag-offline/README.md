@@ -1,6 +1,6 @@
 # xat-rag-offline
 
-Startup hardening for the xat-rag **service**. See [ADR 0011](../../docs/adr/0011-offline-hardening.md).
+Startup hardening for the xat-rag **service**.
 
 The package has no dependencies. Call `harden_process()` as the first statement of the service, before any other import. Library mode must never call it, because it changes the whole process.
 
@@ -10,5 +10,3 @@ from xat_rag_offline import harden_process
 
 harden_process(Path("/path/to/data"), allowed_extensions=[sqlite_vec_path])
 ```
-
-[ADR 0011](../../docs/adr/0011-offline-hardening.md) lists the steps of `harden_process()`, and how the frozen app calls it. [ADR 0015](../../docs/adr/0015-remove-service-access-key.md) removes step 3 of ADR 0011, the step that read the access key.

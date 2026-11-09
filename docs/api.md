@@ -389,14 +389,13 @@ The service stops on `SIGINT`, on `SIGTERM`, or when standard input closes with 
 | PDF or DOCX document | 32 MiB | `parse_error`, `too_large` |
 | Parse time of one document | 60 seconds | `parse_error`, `parse_timeout` |
 | PDF pages | 2000 | `parse_error`, `limit_exceeded` |
-| PDF characters | 200000 for each page, 20 million for each document | `parse_error`, `limit_exceeded` |
+| PDF characters in one page | 200000 | The page is skipped, with the reason `page_text_limit`. |
+| PDF characters in one document | 20 million | `parse_error`, `limit_exceeded` |
 | DOCX zip entries | 10000 | `parse_error`, `limit_exceeded` |
 | DOCX uncompressed size | 256 MiB in total, 64 MiB for `word/document.xml` | `parse_error`, `limit_exceeded` |
 | DOCX compression ratio | 100 for each large entry | `parse_error`, `limit_exceeded` |
 | DOCX grid span | 64 | `parse_error`, `limit_exceeded` |
 | HTML `<` characters | 500000 | `parse_error`, `limit_exceeded` |
-
-A PDF page with a character count above the page limit is skipped, with the reason `page_text_limit`.
 
 If a parse runs longer than twice the deadline plus 300 seconds, the service becomes degraded. Uploads then get 503 until a restart.
 

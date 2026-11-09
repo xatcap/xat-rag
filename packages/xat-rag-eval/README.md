@@ -1,6 +1,6 @@
 # xat-rag-eval
 
-The evaluation harness of xat-rag. See the [architecture, section 13](../../docs/architecture.md#13-evaluation) and the [development guide](../../docs/development.md#retrieval-gate). It calls no LLM and uses no judge model.
+The evaluation harness of xat-rag. It calls no LLM and uses no judge model.
 
 ```
 uv run xat-rag-eval run --setup eval/fixtures/setup --golden eval/fixtures/golden.jsonl --data build/out/eval-data --baseline eval/baseline.json
@@ -36,7 +36,5 @@ For each kind, the harness reports these values:
 - Final metrics for the merged list of the context: the recall at 3, 5 and 10, the MRR of the final list, and the source coverage.
 
 The harness checks that the final list has at most 10 chunks, that its chunk IDs are unique and that its scores do not go up. It also checks that the same input gives the same list. It reports p50 and p95 times for the retrieval and for the context request.
-
-The [development guide](../../docs/development.md#retrieval-gate) gives the rules of the gate and of the chunk-boundary test.
 
 The golden sets of an app are owned by the team that owns the app. That team builds 50 to 100 cases for each source kind, from sanitized real data. The fixture set in this repository only tests the harness.

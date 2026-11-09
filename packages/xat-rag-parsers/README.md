@@ -1,6 +1,6 @@
 # xat-rag-parsers
 
-Text parsers and the structural chunker of xat-rag. See the [architecture, sections 4 and 5](../../docs/architecture.md#4-data-model).
+Text parsers and the structural chunker of xat-rag. See [how it works, step 5](../../docs/how-it-works.md#step-5-chunk).
 
 | Parser | Kind | Sections |
 |---|---|---|

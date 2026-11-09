@@ -15,37 +15,13 @@ This file is an index to the documentation in this repository.
 | Page | What it covers |
 |------|----------------|
 | [README.md](README.md) | The goal of xat-rag, who it is for, what it is not, and how an app uses it. |
-| [docs/architecture.md](docs/architecture.md) | Packages, ports, data model, ingestion and retrieval flows, the result of a context request, the HTTP service, recipes, errors, models, evaluation, privacy and the open items of v0.1. |
-| [docs/api.md](docs/api.md) | The HTTP routes of the service, with the request and response bodies, the errors, the upload format, the settings and the limits. |
-| [docs/app-guide.md](docs/app-guide.md) | The work of an app that uses xat-rag: counting tokens, choosing chunks, building prompts, escaping text, handling citations and preparing the question. |
-| [docs/development.md](docs/development.md) | Setup, the build, test and lint commands, the tools, the retrieval gate, packaging, the smoke test and the CI jobs. |
+| [docs/quickstart.md](docs/quickstart.md) | Set up a release, structure recipes, send `curl` requests and use the Python library. |
+| [docs/how-it-works.md](docs/how-it-works.md) | Each step of ingestion and retrieval, with diagrams and a worked example. |
+| [docs/architecture.md](docs/architecture.md) | The layers, the import rules, the ports and how the components work together. |
+| [docs/api.md](docs/api.md) | The HTTP routes, the errors, the upload format, the recipes, the settings, the limits and the Python library. |
 | [docs/portable/writing-style/writing-style.md](docs/portable/writing-style/writing-style.md) | The ASD-STE100 writing rules and the terms. All documentation, code comments, API descriptions, error messages and log messages follow them. |
 
-xat-rag v0.1 is implemented. The code is in `packages/`, `tools/`, `build/` and `eval/`. The [packages](#packages-and-tools) section lists them, and the [development](docs/development.md) page lists the commands.
-
-## Architecture decisions
-
-The ADRs record the significant decisions and their reasons. Read them before you change a related part of the system.
-
-| ADR | Status |
-|-----|--------|
-| [0001. Use LangChain core interfaces as the foundation, and keep the budget, query and store stages our own](docs/adr/0001-langchain-core-as-foundation.md) | Accepted (the budget and log stages are removed, see 0013 and 0014) |
-| [0002. Write xat-rag in Python](docs/adr/0002-python.md) | Accepted |
-| [0003. Offer a Python library and a loopback HTTP service](docs/adr/0003-library-and-loopback-service.md) | Partly superseded by 0015 |
-| [0004. Run the embedder and the reranker with ONNX Runtime, from locked files](docs/adr/0004-onnx-runtime-and-locked-models.md) | Accepted |
-| [0005. Store each RAG in one SQLite file with a manifest](docs/adr/0005-sqlite-store-and-index-manifest.md) | Accepted |
-| [0006. Use hybrid search with RRF and a cross-encoder reranker, without query rewriting](docs/adr/0006-hybrid-retrieval-and-reranking.md) | Partly superseded by 0013 and 0014 |
-| [0007. Let the context recipe own the budget, and count tokens with the generator's tokenizer](docs/adr/0007-context-budget-and-token-counting.md) | Superseded by 0014 |
-| [0008. Return a context pack, and do not call a generator](docs/adr/0008-context-pack-and-citations.md) | Superseded by 0014 |
-| [0009. Map each kind of failure to one error type, with no retries](docs/adr/0009-error-model.md) | Accepted |
-| [0010. Treat retrieved text as untrusted, keep content out of logs, and accept only pushed documents](docs/adr/0010-untrusted-content-privacy-and-ingestion.md) | Partly superseded by 0014 and 0015 |
-| [0011. Turn off tracing and telemetry at startup, and guard against network access](docs/adr/0011-offline-hardening.md) | Partly superseded by 0015, and section 1 amended by 0016 |
-| [0012. Parse PDF, DOCX and HTML in the service process, with limits](docs/adr/0012-document-parsers.md) | Accepted |
-| [0013. Remove log handling and exact lookups from queries](docs/adr/0013-remove-log-handling-and-exact-lookups.md) | Accepted |
-| [0014. Make xat-rag retrieval-only: the app fits the context, and xat-rag has no model knowledge](docs/adr/0014-retrieval-only-and-app-side-fitting.md) | Accepted, and amended by 0017 for the `[context]` fields and the merge |
-| [0015. Remove the access key of the service](docs/adr/0015-remove-service-access-key.md) | Accepted |
-| [0016. Use the release folder for the default paths of the frozen service](docs/adr/0016-release-folder-default-paths.md) | Accepted |
-| [0017. Set a minimum score for each context](docs/adr/0017-minimum-score-of-a-context.md) | Accepted |
+xat-rag v0.1 is implemented. The code is in `packages/`, `tools/`, `build/` and `eval/`. The [packages](#packages-and-tools) section lists them.
 
 ## Packages and tools
 
@@ -68,7 +44,7 @@ The workspace is one uv project. Each package has a README with its modules and 
 | `eval/` | The fixture set (recipes, prompts and documents), the golden set and the baseline of the retrieval gate. |
 | `.github/workflows/ci.yml` | The CI jobs: `check`, `offline` and `package`. |
 
-Build and test commands are in [docs/development.md](docs/development.md). The most used ones are `uv sync --locked`, `uv run python tools/fetch_models.py`, `uv run pytest`, `uv run pyright` and `uv run lint-imports`.
+The most used commands are `uv sync --locked`, `uv run python tools/fetch_models.py`, `uv run pytest`, `uv run pyright` and `uv run lint-imports`.
 
 ## Engineering guidelines
 

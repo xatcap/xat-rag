@@ -1,6 +1,6 @@
 # xat-rag-onnx
 
-The embedder and the reranker of xat-rag. ONNX Runtime runs them in the process, on the CPU. See [ADR 0004](../../docs/adr/0004-onnx-runtime-and-locked-models.md).
+The embedder and the reranker of xat-rag. ONNX Runtime runs them in the process, on the CPU.
 
 | Class | LangChain interface | Model (v1) |
 |---|---|---|

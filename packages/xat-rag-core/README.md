@@ -4,7 +4,7 @@ The domain model, the ports and the rules of xat-rag. See the [architecture](../
 
 | Module | What it does |
 |---|---|
-| `errors` | The error types and their HTTP status codes ([ADR 0009](../../docs/adr/0009-error-model.md)). |
+| `errors` | The error types and their HTTP status codes. |
 | `model` | `SourceDocument`, `Chunk`, the span types, `Candidate`, `RawDocument` and the parse result types. |
 | `ids` | Content hashes, chunk IDs, heading anchors and slugs. `log_id` makes a hashed ID for logs. No code uses it yet. |
 | `parsing` | `SectionParser` (the protocol of the parsers), `Deadline`, `decode_text` and `SectionBlobParser`, a LangChain adapter. |
@@ -19,4 +19,4 @@ The domain model, the ports and the rules of xat-rag. See the [architecture](../
 
 The package depends only on numpy and `langchain-core`.
 
-The package has no LLM code. It does not count tokens for an LLM, it does not build prompts and it does not check citations. See [ADR 0014](../../docs/adr/0014-retrieval-only-and-app-side-fitting.md).
+The package has no LLM code. It does not count tokens for an LLM, it does not build prompts and it does not check citations.

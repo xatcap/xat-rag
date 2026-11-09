@@ -2,7 +2,7 @@
 
 The xat-rag library: recipes, the composition root, ingestion and the retrieve use case. See the [architecture](../../docs/architecture.md).
 
-The [root README](../../README.md#library) has a quick start. The [app guide](../../docs/app-guide.md) describes the work that the app does with the results.
+The [quickstart](../../docs/quickstart.md#8-use-the-python-library) has an example. It also describes the work that the app does with the results.
 
 The `XatRag` facade has these methods:
 
@@ -21,4 +21,4 @@ The `XatRag` facade has these methods:
 
 The public API uses xat-rag types only. The types are `RetrievalResult`, `RetrievedChunk`, `ChunkSource`, `SearchHit`, `OmittedItem` and `DocumentResult`. The planned `xat_rag.langchain` module is not in v0.1.
 
-The library calls no LLM. It builds no prompt and it escapes no text. Library mode does not change the process. It does not call `harden_process`, and it turns tracing off only for its own calls (ADR 0011).
+The library calls no LLM. It builds no prompt and it escapes no text. Library mode does not change the process. It does not call `harden_process`, and it turns tracing off only for its own calls.

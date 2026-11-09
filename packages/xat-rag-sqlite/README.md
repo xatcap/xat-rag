@@ -1,6 +1,6 @@
 # xat-rag-sqlite
 
-The SQLite store of xat-rag. Each RAG is one SQLite file. See [ADR 0005](../../docs/adr/0005-sqlite-store-and-index-manifest.md).
+The SQLite store of xat-rag. Each RAG is one SQLite file.
 
 | Module | What it does |
 |---|---|
