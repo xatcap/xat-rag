@@ -71,8 +71,10 @@ jobs:
           LANGSMITH_RUNS_ENDPOINTS: '{"https://example.invalid": "fake"}'
         # A new network namespace has only loopback, and loopback starts down. Any connection that is not
         # loopback fails, so this checks from outside the process that nothing needs the network.
+        # The outer sudo sets HOME to /root, and the runner user cannot read /root. Docling reads font
+        # folders in HOME when it opens a PDF, so give the tests the HOME of the runner user.
         run: |
-          sudo unshare --net -- sh -c "ip link set lo up && sudo -E -u $USER env PATH=$PATH \
+          sudo unshare --net -- sh -c "ip link set lo up && sudo -E -u $USER env HOME=$HOME PATH=$PATH \
             .venv/bin/python -m pytest packages/xat-rag-service packages/xat-rag -p no:cacheprovider"
 
   package:
