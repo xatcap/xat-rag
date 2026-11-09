@@ -56,24 +56,21 @@ def is_loopback_host(host: object) -> bool:
 
 
 class NetworkGuard:
-    """An audit hook that refuses network, process and library-load events that are not loopback.
+    """An audit hook that refuses process events, unlisted SQLite extensions and network events that are not loopback.
 
     An audit hook cannot be removed. Use `enabled` to turn the checks off, for example in tests.
     """
 
     def __init__(
         self,
-        allowed_libraries: Collection[str] = (),
         allowed_extensions: Collection[str] = (),
         on_block: Callable[[str], None] | None = None,
     ) -> None:
         """Make a guard.
 
-        `allowed_libraries` lists the library names or paths that `ctypes.dlopen` can load.
         `allowed_extensions` lists the SQLite extension paths that can load. `on_block` gets
         the event name when the guard refuses an event.
         """
-        self._allowed_libraries = frozenset(_normalize(name) for name in allowed_libraries)
         self._allowed_extensions = frozenset(_normalize(path) for path in allowed_extensions)
         self._on_block = on_block
         self._lock = threading.Lock()
@@ -102,10 +99,6 @@ class NetworkGuard:
                 self._block(event)
         elif event in _PROCESS_EVENTS:
             self._block(event)
-        elif event == "ctypes.dlopen":
-            name = args[0] if args else None
-            if name is not None and _normalize(name) not in self._allowed_libraries:
-                self._block(event)
         elif event == "sqlite3.load_extension":
             path = args[1] if len(args) >= 2 else None
             if path is None or _normalize(path) not in self._allowed_extensions:

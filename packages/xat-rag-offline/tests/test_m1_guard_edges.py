@@ -1,6 +1,3 @@
-import os
-from pathlib import Path
-
 import pytest
 from xat_rag_offline import BlockedOperationError, NetworkGuard, is_loopback_address
 from xat_rag_offline._guard import is_loopback_host  # pyright: ignore[reportPrivateUsage]
@@ -17,36 +14,11 @@ def test_every_process_event_is_refused(event: str) -> None:
         NetworkGuard().check(event, ())
 
 
-@pytest.mark.parametrize("event", ["open", "import", "exec", "socket.__new__", "unknown.event", "sqlite3.connect"])
+@pytest.mark.parametrize(
+    "event", ["open", "import", "exec", "socket.__new__", "unknown.event", "sqlite3.connect", "ctypes.dlopen"]
+)
 def test_other_events_pass(event: str) -> None:
     NetworkGuard().check(event, (object(),))
-
-
-def test_dlopen_with_none_is_allowed_and_a_named_library_is_not() -> None:
-    guard = NetworkGuard()
-    guard.check("ctypes.dlopen", (None,))
-    guard.check("ctypes.dlopen", ())
-    with pytest.raises(BlockedOperationError):
-        guard.check("ctypes.dlopen", ("libc.so.6",))
-    with pytest.raises(BlockedOperationError):
-        guard.check("ctypes.dlopen", ("",))
-
-
-def test_dlopen_allows_a_listed_library_given_as_bytes_and_by_equal_path(tmp_path: Path) -> None:
-    library = tmp_path / "lib" / "vec.so"
-    guard = NetworkGuard(allowed_libraries=[str(library)])
-    guard.check("ctypes.dlopen", (str(library),))
-    guard.check("ctypes.dlopen", (str(tmp_path / "lib" / ".." / "lib" / "vec.so"),))
-    guard.check("ctypes.dlopen", (os.fsencode(str(library)),))
-    with pytest.raises(BlockedOperationError):
-        guard.check("ctypes.dlopen", (str(tmp_path / "other" / "vec.so"),))
-
-
-def test_dlopen_of_a_plain_name_is_not_resolved_as_a_path() -> None:
-    guard = NetworkGuard(allowed_libraries=["libm.so.6"])
-    guard.check("ctypes.dlopen", ("libm.so.6",))
-    with pytest.raises(BlockedOperationError):
-        guard.check("ctypes.dlopen", ("libm.so.7",))
 
 
 def test_sqlite_extension_needs_a_listed_path() -> None:
@@ -55,14 +27,6 @@ def test_sqlite_extension_needs_a_listed_path() -> None:
     for args in [(), (object(),), (object(), None), (object(), "/opt/x/other.so")]:
         with pytest.raises(BlockedOperationError):
             guard.check("sqlite3.load_extension", args)
-
-
-def test_a_listed_library_does_not_allow_a_sqlite_extension_and_the_other_way_round() -> None:
-    guard = NetworkGuard(allowed_libraries=["/opt/a.so"], allowed_extensions=["/opt/b.so"])
-    with pytest.raises(BlockedOperationError):
-        guard.check("sqlite3.load_extension", (object(), "/opt/a.so"))
-    with pytest.raises(BlockedOperationError):
-        guard.check("ctypes.dlopen", ("/opt/b.so",))
 
 
 @pytest.mark.parametrize("event", ["socket.connect", "socket.sendto", "socket.sendmsg", "socket.bind"])

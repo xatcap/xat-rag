@@ -13,10 +13,10 @@ _CHILD = textwrap.dedent(
     """
     import json, os, sys
     from pathlib import Path
-    from xat_rag_offline import harden_process, BlockedOperationError
+    from xat_rag_offline import harden_process
 
     data = sys.argv[1]
-    hardening = harden_process(Path(data), allowed_libraries=["liballowed.so"])
+    hardening = harden_process(Path(data))
     result = {
         "access_key": hardening.access_key,
         "hf_home": os.environ.get("HF_HOME"),
@@ -26,23 +26,6 @@ _CHILD = textwrap.dedent(
         "enabled": hardening.guard.enabled,
         "token_left": "HF_TOKEN" in os.environ,
     }
-    try:
-        import ctypes
-        ctypes.CDLL(None)
-        result["dlopen_none"] = "allowed"
-    except BlockedOperationError:
-        result["dlopen_none"] = "blocked"
-    except TypeError:  # On Windows, ctypes refuses None before the guard sees it.
-        if os.name != "nt":
-            raise
-        result["dlopen_none"] = "allowed"
-    try:
-        import ctypes
-        ctypes.CDLL("libother.so")
-    except BlockedOperationError:
-        result["dlopen_other"] = "blocked"
-    except OSError:
-        result["dlopen_other"] = "not blocked"
     print(json.dumps(result))
     """
 )
@@ -80,12 +63,6 @@ def test_harden_process_returns_the_access_key_and_removes_it_from_the_environme
 
 def test_harden_process_without_an_access_key_returns_none(tmp_path: Path) -> None:
     assert _run(str(tmp_path), {})["access_key"] is None
-
-
-def test_harden_process_passes_the_library_list_to_the_guard(tmp_path: Path) -> None:
-    result = _run(str(tmp_path), {})
-    assert result["dlopen_none"] == "allowed"
-    assert result["dlopen_other"] == "blocked"
 
 
 def test_hf_home_is_not_changed_when_the_folder_is_none_and_not_set_when_absent() -> None:

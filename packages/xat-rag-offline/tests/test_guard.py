@@ -66,13 +66,9 @@ def test_guard_refuses_processes() -> None:
         guard.check("os.system", (b"curl x",))
 
 
-def test_guard_allows_only_listed_libraries_and_extensions(tmp_path: object) -> None:
-    guard = NetworkGuard(allowed_libraries=["libc.dylib"], allowed_extensions=["/opt/x/vec0.dylib"])
-    guard.check("ctypes.dlopen", ("libc.dylib",))
-    guard.check("ctypes.dlopen", (None,))
+def test_guard_allows_only_listed_extensions() -> None:
+    guard = NetworkGuard(allowed_extensions=["/opt/x/vec0.dylib"])
     guard.check("sqlite3.load_extension", (object(), "/opt/x/vec0.dylib"))
-    with pytest.raises(BlockedOperationError):
-        guard.check("ctypes.dlopen", ("libevil.dylib",))
     with pytest.raises(BlockedOperationError):
         guard.check("sqlite3.load_extension", (object(), "/tmp/evil.dylib"))
 

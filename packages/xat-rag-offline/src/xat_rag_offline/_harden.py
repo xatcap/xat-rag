@@ -21,7 +21,6 @@ class Hardening:
 
 def harden_process(
     data_folder: Path,
-    allowed_libraries: Collection[str] = (),
     allowed_extensions: Collection[str] = (),
     on_block: Callable[[str], None] | None = None,
 ) -> Hardening:
@@ -31,6 +30,6 @@ def harden_process(
     whole process and installs an audit hook that cannot be removed.
     """
     access_key = harden_environment(os.environ, data_folder / "hf")
-    guard = NetworkGuard(allowed_libraries, allowed_extensions, on_block)
+    guard = NetworkGuard(allowed_extensions, on_block)
     guard.install()
     return Hardening(access_key=access_key, guard=guard)

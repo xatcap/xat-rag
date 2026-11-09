@@ -530,7 +530,7 @@ See [ADR 0010](adr/0010-untrusted-content-privacy-and-ingestion.md), [ADR 0011](
 
 `langchain-core` ships the `langsmith` client, and tracing can send text to a remote server. [ADR 0011](adr/0011-offline-hardening.md) gives the full rules. In short:
 
-- **Service mode.** Before any LangChain import, the service removes the tracing variables and the variables that can hold secrets. An audit hook then refuses process starts, unknown native libraries and network events outside loopback. The hook is defense in depth only, because native code can pass it.
+- **Service mode.** Before any LangChain import, the service removes the tracing variables and the variables that can hold secrets. An audit hook then refuses process starts, unlisted SQLite extensions and network events outside loopback. The hook is defense in depth only, because native code can pass it.
 - **Both modes.** Each use case turns tracing off inside its worker thread. In library mode, this is the only protection, because xat-rag does not change the process of the host app.
 - **CI.** The `offline` job runs the service and library tests in a network namespace with only loopback.
 

@@ -66,7 +66,6 @@ An audit hook (`sys.addaudithook`) refuses these events, except for loopback:
 
 - `socket.connect`, `socket.sendto`, `socket.sendmsg`, `socket.bind`, `socket.getaddrinfo`, `socket.gethostbyname`, `socket.gethostbyaddr` and `socket.getnameinfo`. A `sendto` or `sendmsg` with no address is allowed, because it uses a connected socket whose connect was checked. asyncio sends data this way.
 - `subprocess.Popen`, `os.system`, `os.exec*`, `os.spawn*`, `os.posix_spawn`, `os.fork` and `os.forkpty`. The service starts no programs and no child processes.
-- `ctypes.dlopen`.
 - `sqlite3.load_extension`, except for the locked sqlite-vec file. After the load, xat-rag calls `enable_load_extension(False)`.
 
 Loopback means these addresses: Unix socket paths, `127.0.0.0/8`, `::1` (also with a zone ID), `::ffff:127.0.0.1` and the name `localhost`. `0.0.0.0`, `::` and IPv4 text with `%` (which a resolver reads as a host name) are refused. A refused call raises an error that becomes `internal_error`. The log holds the error type and the refused event name, never the address or the data.
@@ -103,5 +102,6 @@ Loopback means these addresses: Unix socket paths, `127.0.0.0/8`, `::1` (also wi
 ## Implementation notes (v0.1)
 
 - `harden_environment` refuses two access key variables that differ only in case.
-- The process events and `ctypes.dlopen` are always refused. The exception for loopback applies only to the socket events. The service allows no library.
+- The process events are always refused. The exception for loopback applies only to the socket events.
+- The guard does not check `ctypes.dlopen`. On Windows, `click` loads system libraries when it is imported, and this stopped the service at startup. A library loaded with `ctypes` can pass the socket checks of the guard, as other native code can. The dependency rules and the tests outside the process control this risk.
 - The packet capture of section 5 and the firewall guidance of section 3 are not met yet. See the [open items](../architecture.md#16-later-versions-and-open-items).
