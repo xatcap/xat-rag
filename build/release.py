@@ -87,6 +87,9 @@ def check_bundle() -> None:
     if found:
         sys.exit(f"The frozen folder holds denied modules: {', '.join(found)}")
     print("the frozen folder holds no denied module")
+    if not any((internal / "sqlite_vec").glob("vec0.*")):
+        sys.exit("The frozen folder holds no sqlite_vec/vec0 extension file.")
+    print("the frozen folder holds the sqlite_vec extension")
 
 
 def _call(

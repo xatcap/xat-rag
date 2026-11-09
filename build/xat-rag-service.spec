@@ -3,7 +3,8 @@
 from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs
 
 datas = collect_data_files("sqlite_vec") + collect_data_files("langchain_core") + collect_data_files("pypdf")
-binaries = collect_dynamic_libs("sqlite_vec") + collect_dynamic_libs("onnxruntime")
+# The default patterns match only "lib*.so" on Linux, so they do not find "vec0.so".
+binaries = collect_dynamic_libs("sqlite_vec", search_patterns=["vec0.*"]) + collect_dynamic_libs("onnxruntime")
 
 a = Analysis(
     ["../packages/xat-rag-service/src/xat_rag_service/main.py"],
