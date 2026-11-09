@@ -1,5 +1,6 @@
 [context]
 name = "triage"
+min_score = -5
 
 [[context.sources]]
 rag = "docs"

@@ -335,3 +335,34 @@ def test_the_size_tokenizer_id_comes_from_the_lock(tmp_path: Path) -> None:
     entry = next(item for item in json.loads(LOCK.read_text())["models"] if item["id"] == "ministral-3-3b-tokenizer")
     sha = next(file["sha256"] for file in entry["files"] if file["path"] == "tokenizer.json")
     assert models.size_counter.tokenizer_id == f"ministral-3-3b-tokenizer@{sha[:12]}"
+
+
+# The minimum score of a context.
+
+RERANKER = "ms-marco-minilm-l6-v2"
+
+
+def test_a_context_has_no_min_score_by_default(tmp_path: Path) -> None:
+    write(tmp_path, {"docs": rag_toml("docs", reranker=RERANKER)}, {"ask": context_toml("ask", ["docs"])})
+    assert load_recipes(tmp_path)[1]["ask"].context.min_score is None
+
+
+@pytest.mark.parametrize(("value", "expected"), [("0", 0.0), ("-5", -5.0), ("-5.5", -5.5), ("1.5", 1.5)])
+def test_a_finite_min_score_is_read(tmp_path: Path, value: str, expected: float) -> None:
+    context = context_toml("ask", ["docs"], extra=f"min_score = {value}")
+    write(tmp_path, {"docs": rag_toml("docs", reranker=RERANKER)}, {"ask": context})
+    assert load_recipes(tmp_path)[1]["ask"].context.min_score == expected
+
+
+@pytest.mark.parametrize("value", ["true", '"1.5"', "inf", "-inf", "nan"])
+def test_a_min_score_that_is_not_a_finite_number_is_refused(tmp_path: Path, value: str) -> None:
+    context = context_toml("ask", ["docs"], extra=f"min_score = {value}")
+    write(tmp_path, {"docs": rag_toml("docs", reranker=RERANKER)}, {"ask": context})
+    with pytest.raises(ConfigError, match=r"context\.min_score"):
+        load_recipes(tmp_path)
+
+
+def test_a_min_score_needs_a_reranker(tmp_path: Path) -> None:
+    write(tmp_path, {"docs": rag_toml("docs")}, {"ask": context_toml("ask", ["docs"], extra="min_score = 0")})
+    with pytest.raises(ConfigError, match="'ask' sets min_score"):
+        load_recipes(tmp_path)

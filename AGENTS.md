@@ -42,9 +42,10 @@ The ADRs record the significant decisions and their reasons. Read them before yo
 | [0011. Turn off tracing and telemetry at startup, and guard against network access](docs/adr/0011-offline-hardening.md) | Partly superseded by 0015, and section 1 amended by 0016 |
 | [0012. Parse PDF, DOCX and HTML in the service process, with limits](docs/adr/0012-document-parsers.md) | Accepted |
 | [0013. Remove log handling and exact lookups from queries](docs/adr/0013-remove-log-handling-and-exact-lookups.md) | Accepted |
-| [0014. Make xat-rag retrieval-only: the app fits the context, and xat-rag has no model knowledge](docs/adr/0014-retrieval-only-and-app-side-fitting.md) | Accepted |
+| [0014. Make xat-rag retrieval-only: the app fits the context, and xat-rag has no model knowledge](docs/adr/0014-retrieval-only-and-app-side-fitting.md) | Accepted, and amended by 0017 for the `[context]` fields and the merge |
 | [0015. Remove the access key of the service](docs/adr/0015-remove-service-access-key.md) | Accepted |
 | [0016. Use the release folder for the default paths of the frozen service](docs/adr/0016-release-folder-default-paths.md) | Accepted |
+| [0017. Set a minimum score for each context](docs/adr/0017-minimum-score-of-a-context.md) | Accepted |
 
 ## Packages and tools
 

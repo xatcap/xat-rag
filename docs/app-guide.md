@@ -17,7 +17,7 @@ Choose the chunks in your own code. A simple policy works well:
 
 Count the system message, the question and the space for the answer too. The budget for chunks is what is left after these parts.
 
-A result can have fewer chunks than you asked for. Plan for a short list. An empty list is possible when the RAGs hold no chunks.
+A result can have fewer chunks than you asked for. Plan for a short list. An empty list is possible, and it has one of two causes. The RAGs can hold no matching chunks. Or every candidate can score below the `min_score` of the context recipe. The `omitted` list tells the causes apart. A `low_score` item means the second cause. The default contexts set `min_score`, so an empty list is possible for them. Handle an empty list in your code.
 
 ## 2. Build the prompt
 

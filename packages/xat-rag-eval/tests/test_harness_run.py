@@ -198,3 +198,10 @@ def test_the_report_json_has_the_final_metrics_and_not_the_old_ones() -> None:
     assert kind["recall"]["lexical"] == 1.0
     assert {"retrieve_context_p50", "retrieve_context_p95"} <= set(data["timing_ms"])
     assert not any(name.startswith("compose") for name in data["timing_ms"])
+
+
+def test_an_empty_final_list_gives_zero_and_no_violation() -> None:
+    report = run_with(FakeRag([]), case([Relevant(chunk_id="a")]))
+    assert report.kinds["md"].final_recall == {"3": 0.0, "5": 0.0, "10": 0.0}
+    assert report.kinds["md"].final_mrr == 0.0
+    assert report.invariant_violations == []

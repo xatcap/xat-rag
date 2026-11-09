@@ -1,5 +1,6 @@
 [context]
 name = "ask-docs"
+min_score = -5
 
 [[context.sources]]
 rag = "docs"

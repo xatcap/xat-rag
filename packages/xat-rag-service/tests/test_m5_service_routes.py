@@ -16,7 +16,7 @@ from fastapi.testclient import TestClient
 from pypdf import PdfReader, PdfWriter
 from service_setup import LOCK, MODELS, multipart, write_setup
 from xat_rag import ContextRequest, RetrievalResult, Settings, XatRag
-from xat_rag.types import DocumentResult
+from xat_rag.types import DocumentResult, OmittedItem
 from xat_rag_core.model import RawDocument
 from xat_rag_service.app import MAX_UPLOAD_BYTES, create_app
 
@@ -839,3 +839,22 @@ def test_a_browser_origin_is_refused_on_every_route(client: TestClient) -> None:
 def test_the_number_of_chunks_must_be_a_json_integer(client: TestClient, value: object) -> None:
     body = {"context": "ask", "question": "Which port?", "chunks": value}
     assert client.post("/v1/context", json=body).status_code == 400
+
+
+def test_min_score_in_the_context_body_is_refused(client: TestClient) -> None:
+    response = client.post("/v1/context", json={"context": "ask", "question": "Which port?", "min_score": 0})
+    assert response.status_code == 400, response.text
+    assert "an unknown field" in response.json()["error"]["message"]
+    assert "min_score" not in response.text
+
+
+def test_a_context_with_only_low_scores_is_a_success(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    result = RetrievalResult((), (OmittedItem("x#1", "low_score"),))
+
+    def only_low_scores(_self: XatRag, _request: ContextRequest) -> RetrievalResult:
+        return result
+
+    monkeypatch.setattr(XatRag, "retrieve", only_low_scores)
+    response = client.post("/v1/context", json={"context": "ask", "question": "Which port?"})
+    assert response.status_code == 200, response.text
+    assert response.json() == {"chunks": [], "omitted": [{"chunk_id": "x#1", "reason": "low_score"}], "debug": None}

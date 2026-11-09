@@ -61,7 +61,7 @@ class SearchHit:
 
 @dataclass(frozen=True, slots=True)
 class OmittedItem:
-    """A candidate that is not in the result, and why: `duplicate` or `limit`."""
+    """A candidate that is not in the result, and why: `duplicate`, `low_score` or `limit`."""
 
     chunk_id: str
     reason: str

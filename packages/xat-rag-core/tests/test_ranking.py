@@ -82,10 +82,48 @@ def test_a_score_that_is_not_a_number_is_an_internal_error() -> None:
 
 
 def test_the_omit_reasons_have_stable_names() -> None:
-    assert {reason.value for reason in OmitReason} == {"duplicate", "limit"}
+    assert {reason.value for reason in OmitReason} == {"duplicate", "limit", "low_score"}
 
 
 def test_a_chunk_in_two_rags_keeps_its_higher_score() -> None:
     result = merge_ranked([[cand("a", rerank=1.0)], [cand("a", rerank=2.0)]], 5)
     assert [final_score(candidate) for candidate in result.chosen] == [2.0]
     assert result.omitted == (("a", OmitReason.DUPLICATE),)
+
+
+def test_no_min_score_filters_nothing() -> None:
+    result = merge_ranked([[cand("a", rerank=-100.0)]], 5)
+    assert ids(result.chosen) == ["a"]
+
+
+def test_a_score_equal_to_min_score_is_kept_and_a_lower_score_is_omitted() -> None:
+    result = merge_ranked([[cand("a", rerank=-5.0), cand("b", rerank=-5.01)]], 5, min_score=-5.0)
+    assert ids(result.chosen) == ["a"]
+    assert result.omitted == (("b", OmitReason.LOW_SCORE),)
+
+
+def test_all_candidates_below_min_score_give_an_empty_result() -> None:
+    result = merge_ranked([[cand("a", rerank=-9.0), cand("b", rerank=-8.0)]], 5, min_score=0.0)
+    assert result.chosen == ()
+    assert result.omitted == (("b", OmitReason.LOW_SCORE), ("a", OmitReason.LOW_SCORE))
+
+
+def test_a_low_score_is_the_reason_even_when_the_limit_is_reached() -> None:
+    result = merge_ranked([[cand("a", rerank=2.0), cand("b", rerank=1.0), cand("c", rerank=-9.0)]], 1, min_score=0.0)
+    assert result.omitted == (("b", OmitReason.LIMIT), ("c", OmitReason.LOW_SCORE))
+
+
+def test_a_copy_of_a_chosen_chunk_is_a_duplicate_even_below_min_score() -> None:
+    result = merge_ranked([[cand("a", rerank=2.0)], [cand("a", rerank=-9.0)]], 5, min_score=0.0)
+    assert ids(result.chosen) == ["a"]
+    assert result.omitted == (("a", OmitReason.DUPLICATE),)
+
+
+def test_two_low_copies_of_a_chunk_are_both_low_score() -> None:
+    result = merge_ranked([[cand("a", rerank=-1.0)], [cand("a", rerank=-2.0)]], 5, min_score=0.0)
+    assert result.omitted == (("a", OmitReason.LOW_SCORE), ("a", OmitReason.LOW_SCORE))
+
+
+def test_the_filtered_result_is_a_prefix_of_the_unfiltered_result() -> None:
+    lists = [[cand("a", rerank=3.0), cand("b", rerank=-1.0)], [cand("c", rerank=1.0), cand("d", rerank=-4.0)]]
+    assert ids(merge_ranked(lists, 5).chosen)[:2] == ids(merge_ranked(lists, 5, min_score=0.0).chosen)

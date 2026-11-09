@@ -220,6 +220,7 @@ def _exercise(binary: Path, env: dict[str, str], ready: Path, logs: Path, cwd: P
         question = json.dumps({"context": "ask-docs", "question": "Which port do orders use?"}).encode()
         status, result = _call(url, "/v1/context", body=question, method="POST")
         assert status == 200, result
+        assert result["chunks"], result
         first = result["chunks"][0]
         assert first["chunk_id"] == "docs:orders.md#h/orders-service/ports-and-health", first
         assert first["source"]["doc_id"] == "docs:orders.md", first

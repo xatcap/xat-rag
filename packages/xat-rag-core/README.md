@@ -13,7 +13,7 @@ The domain model, the ports and the rules of xat-rag. See the [architecture](../
 | `sanitize` | Removes control, invisible and bidirectional characters, and normalizes to NFC. |
 | `fusion` | Reciprocal Rank Fusion with `chunk_id` tie-breaks. |
 | `mmr` | Duplicate removal and Maximal Marginal Relevance. |
-| `ranking` | `merge_ranked()`. It sorts the candidates of all RAGs by score, removes repeated chunk IDs and cuts the list to the number of chunks. It reports each omitted candidate with its reason: `duplicate` or `limit`. |
+| `ranking` | `merge_ranked()`. It sorts the candidates of all RAGs by score, removes repeated chunk IDs, removes the candidates below `min_score` and cuts the list to the number of chunks. It reports each omitted candidate with its reason: `duplicate`, `low_score` or `limit`. |
 | `ports` | The `TokenCounter` protocol of the size ruler. |
 | `tracing` | `no_tracing()` and `untraced()`, which turn off LangChain and LangSmith tracing for one call. |
 

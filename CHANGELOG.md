@@ -51,6 +51,7 @@ A request with a removed field gets 400.
 
 - Each chunk: `parent_id`, `header`, `source` (with `rag`, `doc_id`, `source_kind`, `uri`, `title`, `version` and `span`) and `metadata`.
 - `POST /v1/rags/{rag}/search` hits have the chunk fields. They keep the stage scores.
+- Omitted reason `low_score`. An app with an exhaustive match on the omitted reasons must add this reason.
 
 ### Removed error type
 
@@ -70,6 +71,7 @@ A request with a removed field gets 400.
 ### Added recipe keys
 
 - `[context]`: `chunks`, from 1 to 100. The default is 10.
+- `[context]`: `min_score`, a finite number. It has no default, so no score filter applies. A candidate with a lower score is omitted with the reason `low_score`. The RAGs of the context need a reranker. See [ADR 0017](docs/adr/0017-minimum-score-of-a-context.md).
 
 ### Changed behavior
 
@@ -78,6 +80,7 @@ A request with a removed field gets 400.
 - A chunk whose document is deleted during a request is left out of the result.
 - A chunk has a `score`, which is the rerank score when the RAG has a reranker, and otherwise the RRF score.
 - The retrieval gate checks the final list of each case. It checks the recall at 5 and at 10, and the final MRR. The budget rule and the pack recall are removed. The source coverage is reported only.
+- The default contexts `ask-docs`, `ask-pdfs` and `triage` set `min_score = -5`. They can now return an empty list. Apps with their own recipes are unchanged, unless they add the `min_score` key.
 
 ### Library changes
 
@@ -112,6 +115,13 @@ A request with a removed field gets 400.
 1. Move `data/` and `models/` out of the release folder before you replace it. Replacing the folder deletes both folders.
 2. Or send the documents again, after the new release starts, to build the indexes again.
 3. If the release folder is read-only, set `XatRag__DataFolder` to a folder that the user can write to.
+
+### Default recipes
+
+- A release has the default RAG `pdfs`, which has the kind `pdf`. It has the default context `ask-pdfs`, which searches only `pdfs`.
+- At start, the service creates the file `data/pdfs.sqlite`, as it does for each other RAG.
+- A user with an own recipe named `pdfs` or `ask-pdfs` in the recipes folder must check for a name conflict.
+- The default contexts `ask-docs`, `ask-pdfs` and `triage` set `min_score = -5`. See the changed behavior above.
 
 ### Added documents
 

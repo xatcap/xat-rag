@@ -107,7 +107,7 @@ def retrieve(request: ContextRequest, recipe: ContextRecipe, *, indexes: Mapping
             )
 
     started = time.monotonic()
-    merged = merge_ranked(by_rag, limit)
+    merged = merge_ranked(by_rag, limit, min_score=recipe.context.min_score)
     chunks = retrieved_chunks(merged.chosen, indexes)
     if (time.monotonic() - started) * 1000 > recipe.limits.pack:
         raise StageTimeoutError("pack", recipe.limits.pack)

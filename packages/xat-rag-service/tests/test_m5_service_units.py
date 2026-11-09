@@ -915,3 +915,9 @@ def test_result_json_has_chunks_omitted_and_debug() -> None:
 def test_query_json_has_the_three_texts_and_no_lookups() -> None:
     data = query_json(RetrievalQuery(("a", "b"), "dense", "rerank"))
     assert data == {"lexical_terms": ["a", "b"], "dense_text": "dense", "rerank_text": "rerank"}
+
+
+def test_result_json_keeps_the_low_score_reason() -> None:
+    assert result_json(RetrievalResult((), (OmittedItem("x#1", "low_score"),)))["omitted"] == [
+        {"chunk_id": "x#1", "reason": "low_score"}
+    ]

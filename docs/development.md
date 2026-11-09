@@ -58,7 +58,20 @@ The denylist and the license rules are in `tools/check_dependencies.py`. The all
 
 ## Retrieval gate
 
-`xat-rag-eval` runs a golden set against the fixture corpus. The fixture set is in `eval/fixtures/setup`. It has three RAGs (`docs`, `jira` and `diffs`) and two context recipes (`ask-docs` and `triage`). The golden set is `eval/fixtures/golden.jsonl`.
+`xat-rag-eval` runs a golden set against the fixture corpus. The fixture set is in `eval/fixtures/setup`. It has these RAGs:
+
+- `docs`
+- `jira`
+- `diffs`
+- `pdfs`
+
+It has these context recipes:
+
+- `ask-docs`
+- `ask-pdfs`
+- `triage`
+
+The golden set is `eval/fixtures/golden.jsonl`. It has no PDF cases. The fixture set has no PDF documents, so the RAG `pdfs` has no documents in the gate.
 
 Each golden case has these fields. Unknown fields are errors.
 
@@ -73,7 +86,7 @@ The command needs a baseline file. The `--data` folder must be new or empty, so 
 The report has two kinds of metrics:
 
 - **Stage metrics.** For each RAG of a case, the report has the recall at 10, the nDCG at 10 and the MRR. It has them after each stage: `lexical`, `dense`, `fused` and `reranked`. The `reranked` stage is the order after the reranker, duplicate removal and MMR.
-- **Final metrics.** For each kind, the report has the recall at 3, 5 and 10 of the final list of the context request. It also has the MRR of the final list and the source coverage. The final list is the merge of all RAGs of the context, cut to 10 chunks. For a document-level case, the recall counts the documents in the first N chunks. The source coverage is the share of cases in which the case RAG gives at least one chunk to the final list.
+- **Final metrics.** For each kind, the report has the recall at 3, 5 and 10 of the final list of the context request. It also has the MRR of the final list and the source coverage. The final list is the merge of all RAGs of the context. The merge applies the `min_score` filter of the context recipe, and it cuts the list to 10 chunks. For a document-level case, the recall counts the documents in the first N chunks. The source coverage is the share of cases in which the case RAG gives at least one chunk to the final list.
 
 The gate fails closed. It fails on these problems:
 
@@ -124,7 +137,19 @@ When the service is ready, the ready file holds its URL. Read the `url` field fr
 `build/release.py` has these tasks:
 
 - `package` runs PyInstaller with `build/xat-rag-service.spec`. The output is one folder, `build/out/dist/xat-rag-service/`. This folder is the release folder. It contains the executable, the libraries and these folders:
-  - `recipes/`: a copy of the default recipes from `eval/fixtures/setup/recipes`. These are the RAGs `docs` (Markdown), `jira` and `diffs`, and the contexts `ask-docs` and `triage`.
+  - `recipes/`: a copy of the default recipes from `eval/fixtures/setup/recipes`. These are the RAGs:
+    - `docs` (Markdown)
+    - `jira`
+    - `diffs`
+    - `pdfs` (PDF)
+
+    These are the contexts:
+    - `ask-docs`
+    - `ask-pdfs`
+    - `triage`
+
+    The contexts `ask-docs`, `ask-pdfs` and `triage` set `min_score = -5`. See [ADR 0017](adr/0017-minimum-score-of-a-context.md).
+
   - `data/`: empty. It is the default data folder.
   - `models/`: empty. The models are not in the release folder.
 

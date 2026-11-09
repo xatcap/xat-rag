@@ -10,7 +10,7 @@ from typing import Any, cast
 import pytest
 from test_m5_ingest_files import HTML, make_docx, make_pdf
 from xat_rag import ChunkSource, ContextRequest, RetrievalResult, RetrievedChunk, SearchHit, Settings, XatRag
-from xat_rag.retrieve import chunk_uri
+from xat_rag.retrieve import chunk_uri, retrieve
 from xat_rag_core.errors import InvalidRequestError, NotFoundError
 from xat_rag_core.model import BlockSpan, Chunk, LineSpan, PageSpan, RawDocument, SourceKind
 from xat_rag_core.query import MAX_QUESTION_CHARS, build_query
@@ -706,3 +706,25 @@ def test_a_chunk_of_a_document_deleted_during_the_request_is_left_out(
     monkeypatch.setattr(index.store, "document_versions", without_gone)
     left = rag.retrieve(ContextRequest("all", ALL_TOPICS, chunks=3)).chunks
     assert all(chunk.source.doc_id != gone for chunk in left)
+
+
+# The minimum score of a context.
+
+
+def retrieve_with_min_score(rag: XatRag, min_score: float, *, debug: bool = False) -> RetrievalResult:
+    recipe = rag.context_recipe("ask")
+    section = recipe.context.model_copy(update={"min_score": min_score})
+    request = ContextRequest("ask", question="orders service queue", debug=debug)
+    return retrieve(request, recipe.model_copy(update={"context": section}), indexes={"docs": rag.index("docs")})
+
+
+def test_a_high_min_score_gives_no_chunks_and_names_the_low_scores(rag: XatRag) -> None:
+    result = retrieve_with_min_score(rag, 1000.0, debug=True)
+    assert result.chunks == ()
+    assert any(item.reason == "low_score" for item in result.omitted)
+    assert result.debug
+
+
+def test_a_very_low_min_score_changes_nothing(rag: XatRag) -> None:
+    plain = rag.retrieve(ContextRequest("ask", question="orders service queue"))
+    assert retrieve_with_min_score(rag, -1000.0) == plain

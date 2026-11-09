@@ -16,6 +16,7 @@ class OmitReason(StrEnum):
 
     DUPLICATE = "duplicate"
     LIMIT = "limit"
+    LOW_SCORE = "low_score"
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,8 +33,11 @@ def final_score(candidate: Candidate) -> float:
     return scores.rerank_score if scores.rerank_score is not None else (scores.rrf_score or 0.0)
 
 
-def merge_ranked(by_rag: Sequence[Sequence[Candidate]], limit: int) -> MergeResult:
-    """Sort all candidates by score and then by chunk ID. Keep one copy of each chunk ID, and cut to `limit`."""
+def merge_ranked(by_rag: Sequence[Sequence[Candidate]], limit: int, *, min_score: float | None = None) -> MergeResult:
+    """Sort all candidates by score and then by chunk ID. Keep one copy of each chunk ID, and cut to `limit`.
+
+    A candidate with a score below `min_score` is omitted. A score equal to `min_score` is kept.
+    """
     candidates = [candidate for candidates in by_rag for candidate in candidates]
     if any(math.isnan(final_score(candidate)) for candidate in candidates):
         raise InternalError("A candidate has a score that is not a number.")
@@ -44,6 +48,8 @@ def merge_ranked(by_rag: Sequence[Sequence[Candidate]], limit: int) -> MergeResu
     for candidate in candidates:
         if candidate.chunk_id in seen:
             omitted.append((candidate.chunk_id, OmitReason.DUPLICATE))
+        elif min_score is not None and final_score(candidate) < min_score:
+            omitted.append((candidate.chunk_id, OmitReason.LOW_SCORE))
         elif len(chosen) >= limit:
             omitted.append((candidate.chunk_id, OmitReason.LIMIT))
         else:

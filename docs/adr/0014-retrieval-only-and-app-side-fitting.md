@@ -1,9 +1,11 @@
 # 0014. Make xat-rag retrieval-only: the app fits the context, and xat-rag has no model knowledge
 
-- Status: Accepted
+- Status: Accepted. Amended by ADR 0017 for the `[context]` fields and the merge.
 - Date: 2026-11-09
 - Deciders: Project maintainer
 - Supersedes: [ADR 0007](0007-context-budget-and-token-counting.md) and [ADR 0008](0008-context-pack-and-citations.md). Partly supersedes [ADR 0006](0006-hybrid-retrieval-and-reranking.md) and [ADR 0010](0010-untrusted-content-privacy-and-ingestion.md).
+
+> The `[context]` fields and the merge are amended on 2026-11-09 by [ADR 0017](0017-minimum-score-of-a-context.md). The `[context]` table can set the optional field `min_score`, and the merge can omit a candidate with the reason `low_score`. The rest of this decision stays in force.
 
 ## Context
 

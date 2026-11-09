@@ -5,7 +5,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from xat_rag import Settings, XatRag
+from xat_rag import ContextRequest, Settings, XatRag
 from xat_rag.recipes import load_recipes
 from xat_rag_eval.corpus import load_corpus
 from xat_rag_eval.harness import Case, Relevant, gate, load_golden, report_json, run
@@ -100,3 +100,32 @@ def test_a_case_for_a_document_that_is_in_the_corpus_is_found_in_the_final_list(
     assert item.final_recall["10"] == 1.0
     assert item.source_coverage == 1.0
     assert item.final_mrr > 0.0
+
+
+UNRELATED_QUESTIONS = (
+    "What is the capital of Australia?",
+    "How do I bake sourdough bread at home?",
+    "Who won the football world cup in 1998?",
+    "What is the boiling point of water on Mars?",
+    "Best hiking boots for winter",
+)
+
+
+@needs_models
+@pytest.mark.parametrize("context", ["ask-docs", "triage"])
+@pytest.mark.parametrize("question", UNRELATED_QUESTIONS)
+def test_an_unrelated_question_gives_no_chunks(rag: XatRag, context: str, question: str) -> None:
+    result = rag.retrieve(ContextRequest(context, question))
+    assert result.chunks == ()
+    assert any(item.reason == "low_score" for item in result.omitted)
+
+
+@needs_models
+def test_each_golden_case_keeps_chunks_at_or_above_the_cut_off(rag: XatRag) -> None:
+    _, contexts = load_recipes(SETUP / "recipes")
+    for case in load_golden(GOLDEN):
+        min_score = contexts[case.context].context.min_score
+        assert min_score is not None, case.context
+        result = rag.retrieve(ContextRequest(case.context, case.question))
+        assert result.chunks, case.id
+        assert all(chunk.score >= min_score for chunk in result.chunks), case.id

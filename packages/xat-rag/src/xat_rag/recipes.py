@@ -92,6 +92,8 @@ class ContextSection(_Strict):
     format: Literal[1] = 1
     chunks: int = Field(default=10, ge=1, le=MAX_CHUNKS)
     """How many chunks a request returns when it does not say."""
+    min_score: float | None = Field(default=None, strict=True, allow_inf_nan=False)
+    """The lowest rerank score of a returned chunk. The value depends on the reranker model."""
     sources: list[ContextSource]
 
     _name = field_validator("name")(_check_name)
@@ -147,5 +149,7 @@ def load_recipes(folder: Path) -> tuple[dict[str, RagRecipe], dict[str, ContextR
             raise ConfigError(
                 f"The RAGs of the context '{recipe.context.name}' have no reranker, so they need one rrf_k."
             )
+        if rerankers == {"none"} and recipe.context.min_score is not None:
+            raise ConfigError(f"The context '{recipe.context.name}' sets min_score, so its RAGs need a reranker.")
         contexts[recipe.context.name] = recipe
     return rags, contexts
