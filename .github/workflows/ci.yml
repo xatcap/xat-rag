@@ -60,6 +60,18 @@ jobs:
           cache-dependency-glob: uv.lock
       - name: Install
         run: uv sync --locked
+      # This step is an experiment. On Windows, the PDF pipeline of Docling crashed with an access violation.
+      # The crashes were in different places. Many threads were at work each time.
+      # The step sets the thread count of the threaded PDF parser, of torch and of OpenMP to one.
+      # The Python threads of the pipeline stages stay active.
+      # The fault handler prints a Python trace if a crash happens again.
+      # The step slows the Windows job. Remove it, or move the setting into the code, when the experiment ends.
+      - name: Limit native threads (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          echo "DOCLING_NUM_THREADS=1" >> "$GITHUB_ENV"
+          echo "OMP_NUM_THREADS=1" >> "$GITHUB_ENV"
+          echo "PYTHONFAULTHANDLER=1" >> "$GITHUB_ENV"
       - name: Model cache
         uses: actions/cache@v4
         with:
