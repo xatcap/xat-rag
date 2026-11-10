@@ -91,6 +91,20 @@ def test_pdf_invalid_and_limits() -> None:
     assert error.value.reason is ParseReason.PARSE_TIMEOUT
 
 
+def test_pdf_page_count_refuses_bad_files_before_the_models_are_used(tmp_path: Path) -> None:
+    # The models folder is empty. Each file fails at the page count, before Docling loads a model.
+    def parser(pages: int = 2000) -> PdfParser:
+        return PdfParser(DocumentLimits(max_pdf_pages=pages), models=tmp_path)
+
+    assert reason_of(parser(), raw(SourceKind.PDF, make_layout_pdf(password="pw"))) is ParseReason.ENCRYPTED
+    assert reason_of(parser(), raw(SourceKind.PDF, b"not a pdf")) is ParseReason.INVALID
+    assert reason_of(parser(), raw(SourceKind.PDF, b"%PDF-1.4 /Encrypt junk")) is ParseReason.INVALID
+    two_pages = raw(SourceKind.PDF, make_pdf([TEXT, TEXT]))
+    assert reason_of(parser(1), two_pages) is ParseReason.LIMIT_EXCEEDED
+    empty_password = raw(SourceKind.PDF, make_layout_pdf(password=""))
+    assert reason_of(parser(0), empty_password) is ParseReason.LIMIT_EXCEEDED
+
+
 def test_pdf_needs_the_models_folder() -> None:
     with pytest.raises(ConfigError):
         PdfParser().parse(raw(SourceKind.PDF, make_pdf([TEXT])), Deadline.none())

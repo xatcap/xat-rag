@@ -498,24 +498,26 @@ class PdfParser(_DeclarativeParser):
         return f"pdf-v2+docling{_docling_version()}+layout{LAYOUT_REVISION}+table{TABLE_REVISION}"
 
     def _page_count(self, data: bytes) -> int:
-        from docling.backend.docling_parse_backend import DoclingParseDocumentBackend  # noqa: PLC0415
-        from docling.datamodel.base_models import InputFormat  # noqa: PLC0415
-        from docling.datamodel.document import InputDocument  # noqa: PLC0415
+        """Return the number of pages. PDFium counts the pages. It starts no threads.
 
-        document = InputDocument(
-            path_or_stream=BytesIO(data),
-            format=InputFormat.PDF,
-            backend=DoclingParseDocumentBackend,
-            filename="document.pdf",
-        )
-        if not document.valid:
-            # A file that an empty password opens is valid. Other encrypted files cannot be opened.
-            if b"/Encrypt" in data:
-                raise ParseError(ParseReason.ENCRYPTED, "The PDF file needs a password.")
-            raise ParseError(ParseReason.INVALID, "The document is not a valid PDF file.")
-        count = int(document.page_count)
-        document._backend.unload()
-        return count
+        The Docling backend is not used here. Its `unload` decodes and renders all pages on native threads. On Windows,
+        that native code fails with an access violation.
+        """
+        import pypdfium2  # noqa: PLC0415
+        from docling.utils.locks import pypdfium2_lock  # noqa: PLC0415
+
+        with pypdfium2_lock:
+            try:
+                document = pypdfium2.PdfDocument(data)
+            except pypdfium2.PdfiumError as error:
+                # PDFium tries an empty password, so a file that an empty password opens is valid.
+                if error.err_code in (pypdfium2.raw.FPDF_ERR_PASSWORD, pypdfium2.raw.FPDF_ERR_SECURITY):
+                    raise ParseError(ParseReason.ENCRYPTED, "The PDF file needs a password.") from error
+                raise ParseError(ParseReason.INVALID, "The document is not a valid PDF file.") from error
+            try:
+                return len(document)
+            finally:
+                document.close()
 
     def parse(self, raw: RawDocument, deadline: Deadline) -> ParsedDocument:
         """Parse the document."""

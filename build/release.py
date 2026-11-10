@@ -6,6 +6,8 @@ uv run python build/release.py archive v1.2.3          # archive the frozen fold
 uv run python build/release.py archive-models v1.2.3   # archive the locked models and the lock file
 """
 
+import functools
+import io
 import json
 import os
 import platform
@@ -17,8 +19,9 @@ import time
 import urllib.error
 import urllib.request
 import zipfile
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 ROOT = Path(__file__).resolve().parent.parent
 DIST = ROOT / "build" / "out" / "dist" / "xat-rag-service"
@@ -164,8 +167,34 @@ def smoke_test() -> None:
     print("smoke test passed")
 
 
-def _upload_and_wait(url: str, rag: str, doc_id: str, kind: str, path: Path) -> None:
-    """Upload one document and wait until its job ends well."""
+def _report_stuck(pid: int, logs: Path) -> None:
+    """Print the end of the service log and, if py-spy is installed, the stack of each thread of the service.
+
+    This function does not raise, so that the failed check of the job stays the error of the smoke test.
+    """
+    stdout = sys.stdout
+    if isinstance(stdout, io.TextIOWrapper):  # A Windows console encoding cannot show all characters.
+        cast("io.TextIOWrapper[io.BufferedWriter]", stdout).reconfigure(errors="replace")
+    log = (logs / "stderr.txt").read_text(encoding="utf-8", errors="replace")[-4000:]
+    print(f"The service log:\n{log}", flush=True)
+    spy = shutil.which("py-spy")
+    if spy is None:
+        print("py-spy is not installed, so there is no thread dump.", flush=True)
+        return
+    # The native frames show a stop in native code, for example in the PDF parser. macOS does not support them.
+    command: list[str] = [spy, "dump", "--pid", str(pid), *([] if sys.platform == "darwin" else ["--native"])]
+    try:
+        dump = subprocess.run(  # noqa: S603 - fixed arguments.
+            command, capture_output=True, encoding="utf-8", errors="replace", timeout=120, check=False
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        print(f"py-spy did not make a thread dump: {type(error).__name__}", flush=True)
+        return
+    print(f"The threads of the service:\n{dump.stdout}{dump.stderr}", flush=True)
+
+
+def _upload_and_wait(url: str, rag: str, doc_id: str, kind: str, path: Path, *, on_stuck: Callable[[], None]) -> None:
+    """Upload one document and wait until its job ends well. If the job does not end well, report the service state."""
     boundary = "smoke7b1"
     fields = json.dumps([{"doc_id": doc_id, "kind": kind, "part": "f"}]).encode()
     body = (
@@ -189,6 +218,8 @@ def _upload_and_wait(url: str, rag: str, doc_id: str, kind: str, path: Path) -> 
         if state["status"] in {"done", "failed"}:
             break
         time.sleep(0.1)
+    if state["status"] != "done":
+        on_stuck()
     assert state["status"] == "done", state
     assert state["results"][0]["status"] == "created", state
 
@@ -206,9 +237,11 @@ def _exercise(binary: Path, env: dict[str, str], ready: Path, logs: Path, cwd: P
             time.sleep(0.1)
         print(f"ready in {time.monotonic() - started:.1f} s")
         url = json.loads(ready.read_text())["url"]
-        _upload_and_wait(url, "docs", "docs:orders.md", "markdown", SETUP / "documents" / "docs" / "orders.md")
+        documents = SETUP / "documents"
+        report = functools.partial(_report_stuck, process.pid, logs)
+        _upload_and_wait(url, "docs", "docs:orders.md", "markdown", documents / "docs" / "orders.md", on_stuck=report)
         # A PDF file exercises the layout models and the native libraries of the frozen folder.
-        _upload_and_wait(url, "pdfs", "pdfs:carriers.pdf", "pdf", SETUP / "documents" / "pdfs" / "carriers.pdf")
+        _upload_and_wait(url, "pdfs", "pdfs:carriers.pdf", "pdf", documents / "pdfs" / "carriers.pdf", on_stuck=report)
         question = json.dumps({"context": "ask-docs", "question": "Which port do orders use?"}).encode()
         status, result = _call(url, "/v1/context", body=question, method="POST")
         assert status == 200, result

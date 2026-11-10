@@ -9,12 +9,13 @@ import json
 import logging
 import os
 import signal
+import stat
 import sys
 import threading
 import time
 from collections.abc import Generator
 from pathlib import Path
-from typing import IO, Any
+from typing import IO, Any, cast
 
 import uvicorn
 from xat_rag import Settings, XatRag
@@ -138,14 +139,45 @@ def _watch_ready(server: _Server, settings: ServiceSettings) -> None:
         )
 
 
+_PIPE_POLL_SECONDS = 0.2
+
+
 def _watch_input(server: uvicorn.Server) -> None:
     stdin = sys.stdin
     try:
-        while stdin is not None and stdin.buffer.read(4096):
-            pass
+        if sys.platform == "win32" and stdin is not None and stat.S_ISFIFO(os.fstat(stdin.fileno()).st_mode):
+            _poll_windows_pipe(stdin.fileno(), server)
+        else:
+            while stdin is not None and stdin.buffer.read(4096):
+                pass
     except (OSError, ValueError):
         pass
     server.should_exit = True
+
+
+def _poll_windows_pipe(fd: int, server: uvicorn.Server) -> None:
+    """Read and discard the input pipe until it closes. The read never waits for data.
+
+    On Windows, a blocking read holds the lock of the file descriptor in the C runtime. A DLL that starts up later,
+    such as the OpenBLAS DLL of SciPy, can wait for that lock. Windows holds its DLL load lock during that wait.
+    Thus the job does not continue.
+    """
+    if sys.platform != "win32":
+        return
+    import _winapi  # noqa: PLC0415 - Windows only.
+    import msvcrt  # noqa: PLC0415 - Windows only.
+
+    handle = msvcrt.get_osfhandle(fd)
+    while not server.should_exit:
+        try:
+            # With a size of 0, the result is (bytes available, bytes left in the message).
+            available, _ = cast(tuple[int, int], _winapi.PeekNamedPipe(handle, 0))
+        except OSError:  # Usually, the other end closed the pipe.
+            return
+        if available:
+            os.read(fd, min(available, 4096))
+        else:
+            time.sleep(_PIPE_POLL_SECONDS)
 
 
 def run() -> int:

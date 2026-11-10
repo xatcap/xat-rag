@@ -8,6 +8,7 @@ license = "MIT"
 dependencies = [
     "xat-rag-core",
     "docling==2.149.0",
+    "pypdfium2==5.15.2",
 ]
 
 [tool.uv.sources]

@@ -20,7 +20,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          # Keep the pre-built wheels (torch and others), so that a run does not download them again.
+          prune-cache: false
+          cache-dependency-glob: uv.lock
       - run: uv sync --locked
+      - name: Model cache
+        uses: actions/cache@v4
+        with:
+          path: models
+          key: models-${{ hashFiles('build/models.lock.json') }}
       - name: Get and check the locked models
         run: uv run python tools/fetch_models.py
       - name: Archive the models and the lock file
