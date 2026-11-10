@@ -9,10 +9,17 @@ dependencies = [
     "xat-rag-core",
     "docling==2.149.0",
     "pypdfium2==5.15.2",
+    # Docling needs torch. Declare torch and torchvision here, so that uv uses the CPU index on Linux
+    # (see the sources below). uv applies sources only to direct dependencies.
+    "torch==2.15.0",
+    "torchvision==0.29.2",
 ]
 
 [tool.uv.sources]
 xat-rag-core = { workspace = true }
+# The CUDA build of torch adds more than 2 GB of libraries to the frozen service. The index is in the root pyproject.toml.
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+torchvision = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
 
 [build-system]
 requires = ["hatchling>=1.25"]

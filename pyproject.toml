@@ -39,14 +39,13 @@ dev = [
     "openpyxl>=3.1.5",
 ]
 
+# The CPU build of torch for Linux. xat-rag-documents selects it for torch and torchvision.
 [[tool.uv.index]]
 name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
 [tool.uv.sources]
-torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
-torchvision = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
 xat-rag-offline = { workspace = true }
 xat-rag-core = { workspace = true }
 xat-rag-sqlite = { workspace = true }

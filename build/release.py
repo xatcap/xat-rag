@@ -28,6 +28,8 @@ DIST = ROOT / "build" / "out" / "dist" / "xat-rag-service"
 RELEASE = ROOT / "build" / "out" / "release"
 LOCK = ROOT / "build" / "models.lock.json"
 SETUP = ROOT / "eval" / "fixtures" / "setup"
+# GitHub does not accept a release file of this size or larger.
+RELEASE_FILE_LIMIT = 2 * 1024**3
 
 
 def package() -> None:
@@ -87,6 +89,11 @@ def check_bundle() -> None:
         sys.exit("The frozen folder holds no sqlite_vec/vec0 extension file.")
     print("the frozen folder holds the sqlite_vec extension")
     _check_default_folders()
+    # The archive is smaller than the folder. Thus this check fails a pull request before a release can fail.
+    size = sum(path.stat().st_size for path in DIST.rglob("*") if path.is_file() and not path.is_symlink())
+    print(f"the frozen folder has {size / 1024**2:.0f} MiB")
+    if size >= RELEASE_FILE_LIMIT:
+        sys.exit(f"The frozen folder has {size} bytes. Its archive can be too large for a GitHub release.")
 
 
 def _check_default_folders() -> None:
@@ -275,7 +282,16 @@ def archive(version: str) -> None:
         root_dir=DIST.parent,
         base_dir=DIST.name,
     )
+    _check_size(Path(path))
     print(path)
+
+
+def _check_size(path: Path) -> None:
+    """Fail if the file is too large for a GitHub release, so that the tag build stops before the publish job."""
+    size = path.stat().st_size
+    print(f"{path.name}: {size / 1024**2:.0f} MiB")
+    if size >= RELEASE_FILE_LIMIT:
+        sys.exit(f"The file '{path}' has {size} bytes. A GitHub release file must have less than {RELEASE_FILE_LIMIT}.")
 
 
 def archive_models(version: str) -> None:
@@ -286,6 +302,7 @@ def archive_models(version: str) -> None:
         handle.write(LOCK, LOCK.name)
         for name in _locked_model_names():
             handle.write(ROOT / "models" / name, name)
+    _check_size(path)
     print(path)
 
 

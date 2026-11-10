@@ -21,8 +21,6 @@ from typing import Any, cast
 ROOT = Path(__file__).resolve().parent.parent
 ALLOW = ROOT / "build" / "dependencies.allow.json"
 ROOT_PACKAGE = "xat-rag-service"
-# torch on PyPI lists these for Linux. The Linux build uses the CPU-only torch index, so they are never installed.
-_LINUX_GPU_PREFIXES = ("cuda-", "nvidia-")
 
 LICENSES = re.compile(
     r"\b(MIT|BSD|Apache|PSF|Python Software Foundation|ISC|MPL-2\.0|Mozilla Public License 2\.0|Unlicense|HPND|0BSD"
@@ -45,7 +43,7 @@ def closure() -> tuple[dict[str, str], set[str]]:
     stack = [ROOT_PACKAGE]
     while stack:
         name = stack.pop()
-        if name in seen or name not in packages or name.startswith(_LINUX_GPU_PREFIXES):
+        if name in seen or name not in packages:
             continue
         package = packages[name]
         seen[name] = str(package.get("version", ""))
@@ -64,7 +62,7 @@ def closure() -> tuple[dict[str, str], set[str]]:
 
 # Licenses of packages that are not installed on every build machine (for example Windows-only ones).
 # Each value was checked on PyPI. A change of version needs a new check.
-KNOWN_LICENSES = {"colorama": "BSD-3-Clause", "pywin32": "PSF-2.0", "triton": "MIT"}
+KNOWN_LICENSES = {"colorama": "BSD-3-Clause", "pywin32": "PSF-2.0"}
 # scipy names the GPL of a compiler runtime that it bundles, with the GCC runtime exception. scipy itself is BSD.
 REVIEWED_LICENSES = {"scipy": "BSD-3-Clause"}
 

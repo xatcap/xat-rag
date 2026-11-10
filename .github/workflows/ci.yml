@@ -12,6 +12,37 @@ defaults:
     shell: bash
 
 jobs:
+  static:
+    # These checks give the same result on all platforms, so they run only on Linux. Pyright checks code for the
+    # platform that it runs on, so it runs one time for each platform.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          # Keep the pre-built wheels (torch and others), so that a run does not download them again.
+          prune-cache: false
+          cache-dependency-glob: uv.lock
+      - name: Install
+        run: uv sync --locked
+      - name: Lint and format
+        run: |
+          set -e
+          uv run ruff check packages tools build
+          uv run ruff format --check packages tools build
+      - name: Types
+        run: |
+          set -e
+          uv run pyright --pythonplatform Linux
+          uv run pyright --pythonplatform Windows
+          uv run pyright --pythonplatform Darwin
+      - name: Import rules
+        run: uv run lint-imports
+      - name: Dependency allowlist and licenses
+        run: uv run python tools/check_dependencies.py
+
   check:
     strategy:
       fail-fast: false
@@ -36,19 +67,8 @@ jobs:
           key: models-${{ hashFiles('build/models.lock.json') }}
       - name: Get and check the locked models (build time only)
         run: uv run python tools/fetch_models.py
-      - name: Lint and format
-        run: |
-          set -e
-          uv run ruff check packages tools build
-          uv run ruff format --check packages tools build
-      - name: Types
-        run: uv run pyright
-      - name: Import rules
-        run: uv run lint-imports
       - name: Tests (sockets blocked, except loopback where a test allows it)
         run: uv run pytest
-      - name: Dependency allowlist and licenses
-        run: uv run python tools/check_dependencies.py
       - name: Retrieval quality gate
         run: uv run xat-rag-eval run --setup eval/fixtures/setup --golden eval/fixtures/golden.jsonl --data ${{ runner.temp }}/eval --baseline eval/baseline.json
 

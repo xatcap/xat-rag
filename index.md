@@ -33,7 +33,7 @@ The workspace is one uv project. Each package has a README with its modules and 
 | `tools/` | `fetch_models.py`, `check_dependencies.py`, `check_onnx_network.py` and `make_eval_documents.py`. They are build, check and fixture scripts, and they are not shipped. |
 | `build/` | `release.py` (package, check-bundle and smoke test), the PyInstaller spec and runtime hook, and the model and dependency lock files. |
 | `eval/` | The fixture set (recipes and documents), the golden set, the baseline of the retrieval gate and the split comparison. |
-| `.github/workflows/ci.yml` | The CI jobs: `check`, `offline` and `package`. |
+| `.github/workflows/ci.yml` | The CI jobs: `static` (lint, types for each platform, import rules and dependencies, on Linux only), `check` (tests and the retrieval gate on each platform), `offline` and `package`. |
 
 The most used commands are `uv sync --locked`, `uv run python tools/fetch_models.py`, `uv run pytest`, `uv run pyright` and `uv run lint-imports`.
 

@@ -14,29 +14,24 @@ jobs:
     uses: ./.github/workflows/ci.yml
 
   models:
+    # This job does not need the CI results, so it runs at the same time as the CI jobs. The scripts use only the
+    # standard library, so the job installs no dependencies.
     runs-on: ubuntu-latest
-    needs: ci
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-          # Keep the pre-built wheels (torch and others), so that a run does not download them again.
-          prune-cache: false
-          cache-dependency-glob: uv.lock
-      - run: uv sync --locked
       - name: Model cache
         uses: actions/cache@v4
         with:
           path: models
           key: models-${{ hashFiles('build/models.lock.json') }}
       - name: Get and check the locked models
-        run: uv run python tools/fetch_models.py
+        run: uv run --no-project --python 3.12 python tools/fetch_models.py
       - name: Archive the models and the lock file
         env:
           TAG: ${{ github.ref_name }}
-        run: uv run python build/release.py archive-models "$TAG"
+        run: uv run --no-project --python 3.12 python build/release.py archive-models "$TAG"
       - uses: actions/upload-artifact@v4
         with:
           name: models
@@ -47,7 +42,7 @@ jobs:
   publish:
     # Only this job can write to the repository, so it runs no code from the repository or its dependencies.
     runs-on: ubuntu-latest
-    needs: models
+    needs: [ci, models]
     timeout-minutes: 15
     permissions:
       contents: write
