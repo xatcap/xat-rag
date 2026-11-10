@@ -3,13 +3,15 @@ import itertools
 import threading
 import zipfile
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
+from docling.datamodel.base_models import ConversionStatus, DoclingComponentType, ErrorItem
 from fixtures_documents import HTML, make_docx, make_layout_pdf, make_pdf, make_xlsx
 from xat_rag_core.errors import ConfigError, ParseError, ParseReason
 from xat_rag_core.model import BlockSpan, CellSpan, PageSpan, RawDocument, SourceKind
 from xat_rag_core.parsing import Deadline
-from xat_rag_documents import DocumentLimits, DocxParser, HtmlParser, PdfParser, XlsxParser
+from xat_rag_documents import DocumentLimits, DocxParser, HtmlParser, PdfParser, XlsxParser, docling_parsers
 from xat_rag_parsers import ChunkLimits, StructuralChunker
 
 MODELS = Path(__file__).resolve().parents[3] / "models"
@@ -103,6 +105,18 @@ def test_pdf_page_count_refuses_bad_files_before_the_models_are_used(tmp_path: P
     assert reason_of(parser(1), two_pages) is ParseReason.LIMIT_EXCEEDED
     empty_password = raw(SourceKind.PDF, make_layout_pdf(password=""))
     assert reason_of(parser(0), empty_password) is ParseReason.LIMIT_EXCEEDED
+
+
+def test_a_failed_conversion_logs_the_docling_module(caplog: pytest.LogCaptureFixture) -> None:
+    error = ErrorItem(
+        component_type=DoclingComponentType.USER_INPUT, module_name="StandardPdfPipeline", error_message="SECRET-TEXT"
+    )
+    result = SimpleNamespace(status=ConversionStatus.FAILURE, errors=[error])
+    with pytest.raises(ParseError) as raised:
+        docling_parsers._check_result(result)  # pyright: ignore[reportPrivateUsage]
+    assert raised.value.reason is ParseReason.INVALID
+    assert "component user_input, module StandardPdfPipeline" in caplog.text
+    assert "SECRET-TEXT" not in caplog.text  # The message can hold text of the document.
 
 
 def test_pdf_needs_the_models_folder() -> None:

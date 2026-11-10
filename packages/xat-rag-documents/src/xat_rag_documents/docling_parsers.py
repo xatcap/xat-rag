@@ -258,6 +258,14 @@ def _check_result(result: Any) -> None:
     from docling.datamodel.base_models import ConversionStatus  # noqa: PLC0415
 
     if result.status not in {ConversionStatus.SUCCESS, ConversionStatus.PARTIAL_SUCCESS}:
+        # Docling stores the errors and does not raise them. Log the component and the module only, because an error
+        # message can hold text of the document.
+        for item in getattr(result, "errors", None) or []:
+            _LOG.warning(
+                "Docling could not read a file: component %s, module %s",
+                getattr(item.component_type, "value", item.component_type),
+                item.module_name,
+            )
         raise ParseError(ParseReason.INVALID, "The document could not be read.")
 
 

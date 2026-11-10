@@ -151,8 +151,10 @@ def smoke_test() -> None:
         }
         _exercise(_binary(DIST), env, explicit / "ready.json", explicit, ROOT)
 
-        # The defaults run on a copy, so that the archive of the frozen folder stays free of models and data.
-        copy = work / "xat rag é" / DIST.name
+        # The defaults run on a copy, so that the archive of the frozen folder stays free of models and data. The
+        # path has a space. Do not add a non-ASCII character, because the PDF parser of Docling fails on such a path
+        # on Windows.
+        copy = work / "xat rag" / DIST.name
         shutil.copytree(DIST, copy, symlinks=True)
         for name in _locked_model_names():
             target = copy / "models" / name
@@ -218,7 +220,7 @@ def _upload_and_wait(url: str, rag: str, doc_id: str, kind: str, path: Path, *, 
         if state["status"] in {"done", "failed"}:
             break
         time.sleep(0.1)
-    if state["status"] != "done":
+    if state["status"] != "done" or state["results"][0]["status"] != "created":
         on_stuck()
     assert state["status"] == "done", state
     assert state["results"][0]["status"] == "created", state
