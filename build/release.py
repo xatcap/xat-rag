@@ -167,6 +167,38 @@ def smoke_test() -> None:
     print("smoke test passed")
 
 
+def probe_paths() -> None:
+    """TEMPORARY: find which part of the release path breaks the PDF parse on Windows. Remove when the cause is known.
+
+    Each case runs the frozen service from a copy with one path property: ASCII, a space, or a non-ASCII character.
+    The last case keeps the non-ASCII copy, but reads the models from the ASCII models folder of the repository.
+    """
+    cases = [
+        ("xatrag", {}),
+        ("xat rag", {}),
+        ("xaté", {}),
+        ("xaté models-ascii", {"XatRag__ModelsFolder": str(ROOT / "models"), "XatRag__LockFile": str(LOCK)}),
+    ]
+    outcomes: list[str] = []
+    with tempfile.TemporaryDirectory() as folder:
+        for name, extra in cases:
+            work = Path(folder) / f"case{len(outcomes)}"
+            copy = work / name / DIST.name
+            shutil.copytree(DIST, copy, symlinks=True)
+            for model in _locked_model_names():
+                target = copy / "models" / model
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(ROOT / "models" / model, target)
+            shutil.copy2(LOCK, copy / "models" / LOCK.name)
+            print(f"--- case '{name}' ---", flush=True)
+            try:
+                _exercise(_binary(copy), _base_environment() | extra, copy / "data" / "ready.json", work, work)
+                outcomes.append(f"PASS '{name}'")
+            except (AssertionError, SystemExit) as error:
+                outcomes.append(f"FAIL '{name}': {str(error)[:300]}")
+    print("\n".join(outcomes), flush=True)
+
+
 def _report_stuck(pid: int, logs: Path) -> None:
     """Print the end of the service log and, if py-spy is installed, the stack of each thread of the service.
 
@@ -218,7 +250,7 @@ def _upload_and_wait(url: str, rag: str, doc_id: str, kind: str, path: Path, *, 
         if state["status"] in {"done", "failed"}:
             break
         time.sleep(0.1)
-    if state["status"] != "done":
+    if state["status"] != "done" or state["results"][0]["status"] != "created":
         on_stuck()
     assert state["status"] == "done", state
     assert state["results"][0]["status"] == "created", state
@@ -292,6 +324,7 @@ if __name__ == "__main__":
         "package": package,
         "smoke-test": smoke_test,
         "check-bundle": check_bundle,
+        "probe-paths": probe_paths,  # TEMPORARY.
         "archive": lambda: archive(sys.argv[2]),
         "archive-models": lambda: archive_models(sys.argv[2]),
     }

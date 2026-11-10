@@ -258,6 +258,16 @@ def _check_result(result: Any) -> None:
     from docling.datamodel.base_models import ConversionStatus  # noqa: PLC0415
 
     if result.status not in {ConversionStatus.SUCCESS, ConversionStatus.PARTIAL_SUCCESS}:
+        # Docling keeps the error and does not raise it. The component and module only. A message can hold text of
+        # the document.
+        for item in getattr(result, "errors", None) or []:
+            _LOG.warning(
+                "Docling could not read a file: component %s, module %s",
+                getattr(item.component_type, "value", item.component_type),
+                item.module_name,
+            )
+            # TEMPORARY for the Windows CI probe. Remove when the cause is known.
+            _LOG.warning("Docling error message (temporary): %s", item.error_message)
         raise ParseError(ParseReason.INVALID, "The document could not be read.")
 
 

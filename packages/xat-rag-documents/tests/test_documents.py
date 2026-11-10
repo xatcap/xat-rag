@@ -105,6 +105,20 @@ def test_pdf_page_count_refuses_bad_files_before_the_models_are_used(tmp_path: P
     assert reason_of(parser(0), empty_password) is ParseReason.LIMIT_EXCEEDED
 
 
+def test_a_failed_conversion_logs_the_docling_module(caplog: pytest.LogCaptureFixture) -> None:
+    from types import SimpleNamespace  # noqa: PLC0415
+
+    from docling.datamodel.base_models import ConversionStatus, DoclingComponentType, ErrorItem  # noqa: PLC0415
+    from xat_rag_documents.docling_parsers import _check_result  # pyright: ignore[reportPrivateUsage]  # noqa: PLC0415
+
+    error = ErrorItem(component_type=DoclingComponentType.PIPELINE, module_name="StandardPdfPipeline", error_message="x")
+    result = SimpleNamespace(status=ConversionStatus.FAILURE, errors=[error])
+    with pytest.raises(ParseError) as raised:
+        _check_result(result)
+    assert raised.value.reason is ParseReason.INVALID
+    assert "component pipeline, module StandardPdfPipeline" in caplog.text
+
+
 def test_pdf_needs_the_models_folder() -> None:
     with pytest.raises(ConfigError):
         PdfParser().parse(raw(SourceKind.PDF, make_pdf([TEXT])), Deadline.none())
