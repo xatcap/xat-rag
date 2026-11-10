@@ -116,11 +116,6 @@ jobs:
         run: |
           uv tool install py-spy==0.4.3
           uv tool dir --bin >> "$GITHUB_PATH"
-      # TEMPORARY: find which path property breaks the PDF parse on Windows. Remove when the cause is known.
-      - name: Probe the release paths
-        if: runner.os == 'Windows'
-        continue-on-error: true
-        run: uv run python build/release.py probe-paths
       - run: uv run python build/release.py smoke-test
       # Only a release keeps the frozen folder, so that it publishes the same files that the smoke test used.
       - name: Archive the frozen folder
